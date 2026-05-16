@@ -14,22 +14,40 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 11
+          java-version: 17
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          packages: "platforms;android-30 build-tools;30.0.3"
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
 
-      - name: Build Minimal APK
+      - name: Build APK
         run: |
-          # Create project structure
+          cat > settings.gradle << 'SETTINGS'
+          rootProject.name = 'cakru'
+          include ':app'
+          SETTINGS
+          
+          cat > build.gradle << 'GRADLE'
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:7.4.2' }
+          }
+          allprojects {
+              repositories { google(); mavenCentral() }
+          }
+          GRADLE
+          
           mkdir -p app/src/main/java/com/cak/ru
           mkdir -p app/src/main/res/values
           
-          # AndroidManifest.xml
+          cat > app/build.gradle << 'APP'
+          android {
+              compileSdk 30
+              namespace 'com.cak.ru'
+              defaultConfig { minSdk 21; targetSdk 30 }
+          }
+          APP
+          
           cat > app/src/main/AndroidManifest.xml << 'MANIFEST'
-          <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
               package="com.cak.ru">
               <application android:label="Cak Ru">
@@ -43,7 +61,6 @@ jobs:
           </manifest>
           MANIFEST
           
-          # MainActivity.java
           cat > app/src/main/java/com/cak/ru/MainActivity.java << 'JAVA'
           package com.cak.ru;
           import android.app.Activity;
@@ -51,51 +68,22 @@ jobs:
           import android.widget.TextView;
           public class MainActivity extends Activity {
               @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
+              protected void onCreate(Bundle b) {
+                  super.onCreate(b);
                   TextView tv = new TextView(this);
                   tv.setText("Hello from Cak Ru!");
-                  tv.setTextSize(24);
                   setContentView(tv);
               }
           }
           JAVA
           
-          # Compile with javac (target Java 8)
-          mkdir -p build/classes
-          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "platforms;android-30" "build-tools;30.0.3"
+          cat > app/src/main/res/values/strings.xml << 'STR'
+          <resources><string name="app_name">Cak Ru</string></resources>
+          STR
           
-          javac -source 1.8 -target 1.8 \
-            -cp "$ANDROID_SDK_ROOT/platforms/android-30/android.jar" \
-            -d build/classes app/src/main/java/com/cak/ru/MainActivity.java
-          
-          # Convert to DEX
-          mkdir -p build/dex
-          $ANDROID_SDK_ROOT/build-tools/30.0.3/dx --dex --output=build/dex/classes.dex build/classes
-          
-          # Package APK
-          $ANDROID_SDK_ROOT/build-tools/30.0.3/aapt package -f \
-            -M app/src/main/AndroidManifest.xml \
-            -I "$ANDROID_SDK_ROOT/platforms/android-30/android.jar" \
-            -F build/app-unaligned.apk build/dex/
-          
-          # Align
-          $ANDROID_SDK_ROOT/build-tools/30.0.3/zipalign -f -p 4 build/app-unaligned.apk build/app-aligned.apk
-          
-          # Generate keystore
-          keytool -genkey -v -keystore debug.keystore -alias debug \
-            -keyalg RSA -keysize 2048 -validity 10000 \
-            -dname "CN=Debug, OU=Debug, O=Debug, L=Debug, ST=Debug, C=US" \
-            -storepass android -keypass android -noprompt
-          
-          # Sign APK
-          $ANDROID_SDK_ROOT/build-tools/30.0.3/apksigner sign \
-            --ks debug.keystore --ks-pass pass:android \
-            --ks-key-alias debug build/app-aligned.apk
-          
-          cp build/app-aligned.apk cak.ru.apk
-          echo "APK size:"
-          ls -lh cak.ru.apk
+          gradle wrapper --gradle-version 7.6 --no-daemon
+          ./gradlew assembleDebug --no-daemon
+          cp app/build/outputs/apk/debug/app-debug.apk cak.ru.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
