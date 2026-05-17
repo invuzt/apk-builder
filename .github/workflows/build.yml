@@ -16,16 +16,21 @@ jobs:
           distribution: temurin
           java-version: 17
       
-      - name: Build APK
+      - name: Build with Gradle 8.1.1
         run: |
-          # Create gradle wrapper if not exists
-          if [ ! -f "gradlew" ]; then
-            gradle wrapper --gradle-version 8.1.1
-          fi
+          # Download Gradle 8.1.1 (bukan 9.5.1)
+          wget https://services.gradle.org/distributions/gradle-8.1.1-bin.zip
+          unzip -q gradle-8.1.1-bin.zip
+          export PATH=$PWD/gradle-8.1.1/bin:$PATH
+          
+          # Buat wrapper versi 8.1.1
+          gradle wrapper --gradle-version 8.1.1
           chmod +x gradlew
+          
+          # Build
           ./gradlew assembleDebug --no-daemon
       
-      - name: Upload
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: compose-builder
