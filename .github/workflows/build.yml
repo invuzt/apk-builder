@@ -16,11 +16,12 @@ jobs:
           distribution: temurin
           java-version: 17
       
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-      
       - name: Build APK
         run: |
+          # Create gradle wrapper if not exists
+          if [ ! -f "gradlew" ]; then
+            gradle wrapper --gradle-version 8.1.1
+          fi
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
       
