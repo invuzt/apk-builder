@@ -3,7 +3,9 @@ package com.builder
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -39,11 +41,20 @@ fun AppNavigation() {
                     "animations" to "Animations",
                     "theming" to "Theming"
                 )
-                items.forEach { (route, title) ->
+                val icons = listOf(
+                    Icons.Default.Star,
+                    Icons.Default.Edit,
+                    Icons.Default.List,
+                    Icons.Default.Home,
+                    Icons.Default.Animation,
+                    Icons.Default.Palette
+                )
+                items.forEachIndexed { index, (route, title) ->
                     NavigationBarItem(
+                        icon = { Icon(icons[index], contentDescription = title) },
+                        label = { Text(title) },
                         selected = false,
-                        onClick = { navController.navigate(route) },
-                        label = { Text(title) }
+                        onClick = { navController.navigate(route) }
                     )
                 }
             }
