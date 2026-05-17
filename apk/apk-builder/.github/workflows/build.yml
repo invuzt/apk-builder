@@ -1,0 +1,31 @@
+name: Build Jetpack Compose
+
+on:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+      
+      - name: Build APK
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+      
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: compose-builder
+          path: app/build/outputs/apk/debug/*.apk
