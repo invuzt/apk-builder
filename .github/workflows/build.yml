@@ -16,15 +16,15 @@ jobs:
           distribution: temurin
           java-version: 17
       
-      - name: Build with Gradle 8.1.1
+      - name: Build APK
         run: |
-          # Download Gradle 8.1.1 (bukan 9.5.1)
-          wget https://services.gradle.org/distributions/gradle-8.1.1-bin.zip
-          unzip -q gradle-8.1.1-bin.zip
-          export PATH=$PWD/gradle-8.1.1/bin:$PATH
+          # Download Gradle 8.7
+          wget https://services.gradle.org/distributions/gradle-8.7-bin.zip
+          unzip -q gradle-8.7-bin.zip
+          export PATH=$PWD/gradle-8.7/bin:$PATH
           
-          # Buat wrapper versi 8.1.1
-          gradle wrapper --gradle-version 8.1.1
+          # Create wrapper
+          gradle wrapper --gradle-version 8.7
           chmod +x gradlew
           
           # Build
