@@ -1,17 +1,13 @@
 package com.builder.screens
 
-import android.content.ContentValues
 import android.content.Context
-import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Matrix
-import android.provider.MediaStore
 import android.util.Log
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.ImageProxy
-import androidx.camera.view.CameraController
 import androidx.camera.view.LifecycleCameraController
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -40,6 +36,7 @@ import com.builder.utils.*
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CameraScreen(
+    controller: LifecycleCameraController,
     currentLoc: android.location.Location?,
     onOpenGallery: () -> Unit
 ) {
@@ -65,11 +62,6 @@ fun CameraScreen(
                 Icon(Icons.Default.Close, null, tint = Color.White, modifier = Modifier.size(32.dp))
             }
         } else {
-            val controller = remember {
-                LifecycleCameraController(context).apply {
-                    setEnabledUseCases(CameraController.IMAGE_CAPTURE)
-                }
-            }
             CameraPreview(controller, Modifier.fillMaxSize())
             
             val alpha by animateFloatAsState(
@@ -108,7 +100,7 @@ fun CameraScreen(
                 ) {
                     Icon(Icons.Default.Circle, null, tint = Color.White, modifier = Modifier.size(80.dp))
                 }
-                IconButton(onClick = onOpenGallery) {
+                IconButton(onOpenGallery) {
                     Icon(Icons.Default.PhotoLibrary, null, tint = Color.White)
                 }
             }
@@ -129,19 +121,19 @@ fun CameraScreen(
 @Composable
 fun SettingsSheet(hq: Boolean, opt: WatermarkOptions, onHq: (Boolean) -> Unit, onOpt: (WatermarkOptions) -> Unit) {
     Column(Modifier.padding(16.dp).verticalScroll(rememberScrollState())) {
-        Text("Settings", fontSize = 20.sp, modifier = Modifier.padding(bottom = 12.dp))
+        Text("Watermark Settings", fontSize = 20.sp, modifier = Modifier.padding(bottom = 12.dp))
         Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
-            Text("High Quality"); Switch(hq, onHq, Modifier.scale(0.8f))
+            Text("High Quality Layout"); Switch(hq, onHq, Modifier.scale(0.8f))
         }
         HorizontalDivider(Modifier.padding(vertical = 8.dp), color = Color.Gray)
-        SettingToggle("Show Time", opt.showTime) { onOpt(opt.copy(showTime = it)) }
-        SettingToggle("Show Date", opt.showDate) { onOpt(opt.copy(showDate = it)) }
-        SettingToggle("Show Coords", opt.showCoords) { onOpt(opt.copy(showCoords = it)) }
-        SettingToggle("Show Address", opt.showAddress) { onOpt(opt.copy(showAddress = it)) }
+        SettingToggle("Tampilkan Jam", opt.showTime) { onOpt(opt.copy(showTime = it)) }
+        SettingToggle("Tampilkan Hari & Tanggal", opt.showDate) { onOpt(opt.copy(showDate = it)) }
+        SettingToggle("Tampilkan Koordinat", opt.showCoords) { onOpt(opt.copy(showCoords = it)) }
+        SettingToggle("Tampilkan Alamat", opt.showAddress) { onOpt(opt.copy(showAddress = it)) }
         OutlinedTextField(
             value = opt.customText,
             onValueChange = { onOpt(opt.copy(customText = it)) },
-            label = { Text("Custom Text") },
+            label = { Text("Teks Kustom") },
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
         )
         Spacer(Modifier.height(40.dp))
@@ -173,25 +165,10 @@ private fun takePhoto(
             val addr = if (opt.showAddress) LocationHelper.getAddress(context, currentLoc) else ""
             val wm = WatermarkManager.apply(b, currentLoc, addr, opt)
             
-            save(context, wm, hq)
+            FileManager.saveImageToGallery(context, wm, hq)
             onRes(wm)
             img.close()
         }
         override fun onError(e: ImageCaptureException) { Log.e("Err", "$e") }
     })
-}
-
-private fun save(context: Context, b: Bitmap, hq: Boolean) {
-    val q = if (hq) 100 else 50
-    val cv = ContentValues().apply { 
-        put(MediaStore.MediaColumns.DISPLAY_NAME, "IMG_${System.currentTimeMillis()}")
-        put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
-        // PERBAIKAN EROR DI SINI: Menyebut penuh package android.os.Build
-        if (android.os.Build.VERSION.SDK_INT >= 29) {
-            put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/CamRU")
-        }
-    }
-    context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, cv)?.let { uri ->
-        context.contentResolver.openOutputStream(uri).use { s -> b.compress(Bitmap.CompressFormat.JPEG, q, s!!) }
-    }
 }
