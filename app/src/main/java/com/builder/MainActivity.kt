@@ -20,22 +20,35 @@ class MainActivity : ComponentActivity() {
     private var currentLoc: android.location.Location? = null
 
     private val locCallback = object : LocationCallback() {
-        override fun onLocationResult(res: LocationResult) { currentLoc = res.lastLocation }
+        override fun onLocationResult(res: LocationResult) { 
+            currentLoc = res.lastLocation 
+        }
+    }
+
+    // PENGATURAN IZIN YANG BENAR & SINKRON
+    private val launcher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
+        // Cek apakah izin lokasi diberikan setelah dialog muncul
+        val fineLocGranted = permissions[android.Manifest.permission.ACCESS_FINE_LOCATION] == true
+        val coarseLocGranted = permissions[android.Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        
+        if (fineLocGranted || coarseLocGranted) {
+            startLocUpdates()
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         
-        val launcher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
-            if (permissions[android.Manifest.permission.ACCESS_FINE_LOCATION] == true) startLocUpdates()
+        // Eksekusi pengecekan izin saat aplikasi dibuka
+        if (PermissionHandler.hasAllPermissions(this)) {
+            startLocUpdates()
+        } else {
+            launcher.launch(PermissionHandler.REQUIRED_PERMISSIONS)
         }
-        
-        if (PermissionHandler.hasAllPermissions(this)) startLocUpdates() else launcher.launch(PermissionHandler.REQUIRED_PERMISSIONS)
 
         setContent {
             MaterialTheme {
-                // Perbaikan Performa: Inisialisasi controller di sini agar terisolasi dari Lag state UI
                 val cameraController = remember {
                     LifecycleCameraController(applicationContext).apply {
                         setEnabledUseCases(CameraController.IMAGE_CAPTURE)
@@ -55,13 +68,19 @@ class MainActivity : ComponentActivity() {
         startActivity(Intent(Intent.ACTION_VIEW).apply {
             type = "image/*"
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        }
-        )
+        })
     }
 
     private fun startLocUpdates() {
-        if (ActivityCompat.checkSelfPermission(this, PermissionHandler.REQUIRED_PERMISSIONS[1]) != 0) return
-        val req = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000).build()
-        fusedLocationClient.requestLocationUpdates(req, locCallback, Looper.getMainLooper())
+        try {
+            val req = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000)
+                .setMinUpdateIntervalMillis(2000) // Update tiap 2 detik jika bergerak
+                .build()
+                
+            fusedLocationClient.requestLocationUpdates(req, locCallback, Looper.getMainLooper())
+        } catch (e: SecurityException) {
+            // Berjaga-jaga jika izin dicabut paksa oleh sistem
+            e.printStackTrace()
+        }
     }
 }
