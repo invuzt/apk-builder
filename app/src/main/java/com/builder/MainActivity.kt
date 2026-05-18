@@ -1,16 +1,19 @@
 package com.builder
 
 import android.content.Intent
+import android.location.Location
 import android.os.Bundle
 import android.os.Looper
-import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.view.CameraController
 import androidx.camera.view.LifecycleCameraController
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.core.app.ActivityCompat
 import com.builder.screens.CameraScreen
 import com.builder.utils.PermissionHandler
@@ -18,13 +21,14 @@ import com.google.android.gms.location.*
 
 class MainActivity : ComponentActivity() {
     private lateinit var fusedLocationClient: FusedLocationProviderClient
-    private var currentLoc: android.location.Location? = null
+    
+    // PERBAIKAN: Gunakan State agar UI mendeteksi perubahan lokasi secara instan
+    private var currentLoc by mutableStateOf<Location?>(null)
 
     private val locCallback = object : LocationCallback() {
         override fun onLocationResult(res: LocationResult) { 
             res.lastLocation?.let {
                 currentLoc = it
-                Log.d("GPS_SUCCESS", "Koordinat: ${it.latitude}, ${it.longitude}")
             }
         }
     }
@@ -53,6 +57,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 
+                // UI akan otomatis terupdate setiap kali 'currentLoc' berubah
                 CameraScreen(
                     controller = cameraController,
                     currentLoc = currentLoc,
@@ -72,13 +77,13 @@ class MainActivity : ComponentActivity() {
     private fun startLocUpdates() {
         if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) != 0) return
         
-        // Ambil lokasi instan sekali
+        // Minta lokasi terbaru sekarang juga
         fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
             .addOnSuccessListener { loc -> if (loc != null) currentLoc = loc }
 
-        // Minta pembaruan berkala dengan parameter yang stabil (kompatibel lama & baru)
-        val req = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 2000)
-            .setMinUpdateIntervalMillis(1000)
+        // Update tiap 1 detik untuk akurasi maksimal di awal
+        val req = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000)
+            .setMinUpdateIntervalMillis(500)
             .build()
             
         fusedLocationClient.requestLocationUpdates(req, locCallback, Looper.getMainLooper())
