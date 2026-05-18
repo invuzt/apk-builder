@@ -24,7 +24,7 @@ class MainActivity : ComponentActivity() {
         override fun onLocationResult(res: LocationResult) { 
             res.lastLocation?.let {
                 currentLoc = it
-                Log.d("GPS_SUCCESS", "Koordinat didapat: ${it.latitude}, ${it.longitude}")
+                Log.d("GPS_SUCCESS", "Koordinat: ${it.latitude}, ${it.longitude}")
             }
         }
     }
@@ -72,16 +72,13 @@ class MainActivity : ComponentActivity() {
     private fun startLocUpdates() {
         if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) != 0) return
         
-        // Taktik 1: Paksa minta lokasi instan saat ini juga (Fresh Location)
+        // Ambil lokasi instan sekali
         fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
-            .addOnSuccessListener { loc ->
-                if (loc != null) currentLoc = loc
-            }
+            .addOnSuccessListener { loc -> if (loc != null) currentLoc = loc }
 
-        // Taktik 2: Minta pembaruan berkala secara agresif
-        val req = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 2000) // Cek tiap 2 detik
+        // Minta pembaruan berkala dengan parameter yang stabil (kompatibel lama & baru)
+        val req = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 2000)
             .setMinUpdateIntervalMillis(1000)
-            .setWaveformPowerUsage(LocationRequest.POWER_USAGE_HIGH) // Gunakan performa penuh GPS hardware
             .build()
             
         fusedLocationClient.requestLocationUpdates(req, locCallback, Looper.getMainLooper())
