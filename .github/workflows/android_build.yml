@@ -22,28 +22,23 @@ jobs:
 
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v4.0.0
+      with:
+        gradle-version: '8.7' # Kita paksa install Gradle 8.7 secara global
 
-    # Solusi Aman: Cari gradlew secara otomatis dan berikan izin eksekusi
-    - name: Grant execute permission for gradlew
-      run: |
-        GRADLEW_PATH=$(find . -name gradlew)
-        if [ -z "$GRADLEW_PATH" ]; then
-          echo "ERROR: File gradlew tidak ditemukan di folder mana pun!"
-          exit 1
-        fi
-        echo "Found gradlew at: $GRADLEW_PATH"
-        chmod +x "$GRADLEW_PATH"
-        echo "DIR_PATH=$(dirname "$GRADLEW_PATH")" >> $GITHUB_ENV
-
-    # Jalankan build di dalam folder tempat gradlew itu berada
     - name: Build with Gradle
       run: |
-        cd ${{ env.DIR_PATH }}
-        ./gradlew assembleDebug
+        # Cari di mana folder 'app' berada
+        APP_PATH=$(find . -name "build.gradle" -exec grep -l "com.android.application" {} \;)
+        PROJECT_ROOT=$(dirname $(dirname "$APP_PATH"))
+        
+        echo "Project detected at: $PROJECT_ROOT"
+        cd "$PROJECT_ROOT"
+        
+        # Gunakan 'gradle' sistem, bukan './gradlew' lokal
+        gradle assembleDebug
 
-    # Cari file APK yang berhasil di-build untuk di-upload
     - name: Upload APK
       uses: actions/upload-artifact@v4.6.0
       with:
-        name: app-debug
+        name: CamRU-Professional-APK
         path: "**/build/outputs/apk/debug/*.apk"
