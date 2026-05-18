@@ -23,14 +23,27 @@ jobs:
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v4.0.0
 
+    # Solusi Aman: Cari gradlew secara otomatis dan berikan izin eksekusi
     - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
+      run: |
+        GRADLEW_PATH=$(find . -name gradlew)
+        if [ -z "$GRADLEW_PATH" ]; then
+          echo "ERROR: File gradlew tidak ditemukan di folder mana pun!"
+          exit 1
+        fi
+        echo "Found gradlew at: $GRADLEW_PATH"
+        chmod +x "$GRADLEW_PATH"
+        echo "DIR_PATH=$(dirname "$GRADLEW_PATH")" >> $GITHUB_ENV
 
+    # Jalankan build di dalam folder tempat gradlew itu berada
     - name: Build with Gradle
-      run: ./gradlew assembleDebug
+      run: |
+        cd ${{ env.DIR_PATH }}
+        ./gradlew assembleDebug
 
+    # Cari file APK yang berhasil di-build untuk di-upload
     - name: Upload APK
       uses: actions/upload-artifact@v4.6.0
       with:
         name: app-debug
-        path: app/build/outputs/apk/debug/app-debug.apk
+        path: "**/build/outputs/apk/debug/*.apk"
