@@ -8,6 +8,7 @@ import android.graphics.*
 import android.location.Location
 import android.os.Build
 import android.os.Bundle
+import android.os.Looper
 import android.provider.MediaStore
 import android.util.Log
 import android.widget.Toast
@@ -40,13 +41,17 @@ import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.builder.screens.CameraPreview
-import com.google.android.gms.location.LocationServices
-import com.google.android.gms.location.Priority
-import com.google.android.gms.tasks.CancellationTokenSource
+import com.google.android.gms.location.*
 import java.text.SimpleDateFormat
 import java.util.*
 
 class MainActivity : ComponentActivity() {
+
+    private lateinit var fusedLocationClient: FusedLocationProviderClient
+    private lateinit var locationCallback: LocationCallback
+    
+    // Variabel global penampung lokasi terkini
+    private var currentGPSLocation: Location? = null
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -54,10 +59,15 @@ class MainActivity : ComponentActivity() {
         val cameraGranted = permissions[Manifest.permission.CAMERA] == true
         val gpsGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true
         
-        if (!cameraGranted) {
+        if (cameraGranted) {
+            // Restart activity jika baru diberi izin agar engine kamera refresh
+        } else {
             Toast.makeText(this, "Izin kamera ditolak!", Toast.LENGTH_LONG).show()
         }
-        if (!gpsGranted) {
+        
+        if (gpsGranted) {
+            startLocationUpdates()
+        } else {
             Toast.makeText(this, "Watermark lokasi tidak akan berfungsi tanpa GPS", Toast.LENGTH_LONG).show()
         }
     }
@@ -65,8 +75,22 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+
+        // Setup langganan perubahan lokasi seperti di video referensi
+        locationCallback = object : LocationCallback() {
+            override fun onLocationResult(locationResult: LocationResult) {
+                for (location in locationResult.locations) {
+                    currentGPSLocation = location
+                    Log.d("GPS_TRACKER", "Lokasi Baru Diterima: ${location.latitude}, ${location.longitude}")
+                }
+            }
+        }
+
         if (!hasRequiredPermissions()) {
             requestPermissionLauncher.launch(REQUIRED_PERMISSIONS)
+        } else {
+            startLocationUpdates()
         }
         
         setContent {
@@ -160,6 +184,23 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun startLocationUpdates() {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            return
+        }
+
+        // Setup interval request (minta lokasi tiap 5 detik sekali dengan akurasi tinggi)
+        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000)
+            .setMinUpdateIntervalMillis(2000)
+            .build()
+
+        fusedLocationClient.requestLocationUpdates(
+            locationRequest,
+            locationCallback,
+            Looper.getMainLooper()
+        )
+    }
+
     private fun openAndroidGallery() {
         val intent = Intent(Intent.ACTION_VIEW).apply {
             type = "image/*"
@@ -186,11 +227,10 @@ class MainActivity : ComponentActivity() {
                     bitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
 
                     if (addWatermark) {
-                        getLastLocation { location ->
-                            val watermarked = applyWatermark(bitmap, location)
-                            saveBitmapToGallery(watermarked)
-                            onProcessed(watermarked)
-                        }
+                        // Menggunakan lokasi yang saat ini dipegang oleh tracker background aktif
+                        val watermarked = applyWatermark(bitmap, currentGPSLocation)
+                        saveBitmapToGallery(watermarked)
+                        onProcessed(watermarked)
                     } else {
                         saveBitmapToGallery(bitmap)
                         onProcessed(bitmap)
@@ -206,30 +246,6 @@ class MainActivity : ComponentActivity() {
         )
     }
 
-    private fun getLastLocation(callback: (Location?) -> Unit) {
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            callback(null)
-            return
-        }
-        
-        val fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
-        
-        // Coba ambil lokasi terakhir dari cache dulu demi kecepatan
-        fusedLocationClient.lastLocation.addOnSuccessListener { cachedLocation ->
-            if (cachedLocation != null) {
-                callback(cachedLocation)
-            } else {
-                // JIKA CACHE KOSONG: Paksa cari lokasi baru secara akurat (High Accuracy)
-                val cts = CancellationTokenSource()
-                fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, cts.token)
-                    .addOnSuccessListener { freshLocation -> callback(freshLocation) }
-                    .addOnFailureListener { callback(null) }
-            }
-        }.addOnFailureListener {
-            callback(null)
-        }
-    }
-
     private fun applyWatermark(source: Bitmap, location: Location?): Bitmap {
         val result = source.copy(source.config, true)
         val canvas = Canvas(result)
@@ -241,7 +257,7 @@ class MainActivity : ComponentActivity() {
         }
         
         val timeStamp = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault()).format(Date())
-        val locText = if (location != null) "Lat: ${location.latitude}, Lon: ${location.longitude}" else "Searching GPS..."
+        val locText = if (location != null) "Lat: ${location.latitude}, Lon: ${location.longitude}" else "GPS Locking..."
         
         val margin = 50f
         canvas.drawText("CAM RU | $timeStamp", margin, source.height - (margin * 2.5f), paint)
@@ -269,6 +285,20 @@ class MainActivity : ComponentActivity() {
 
     private fun hasRequiredPermissions() = REQUIRED_PERMISSIONS.all {
         ContextCompat.checkSelfPermission(applicationContext, it) == PackageManager.PERMISSION_GRANTED
+    }
+
+    override fun onPause() {
+        super.onPause()
+        // Matikan pelacakan saat aplikasi ditutup/minimize demi hemat baterai
+        fusedLocationClient.removeLocationUpdates(locationCallback)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Hidupkan kembali pelacakan saat aplikasi dibuka lagi
+        if (hasRequiredPermissions()) {
+            startLocationUpdates()
+        }
     }
 
     companion object {
