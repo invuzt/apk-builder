@@ -26,6 +26,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -84,10 +85,11 @@ class MainActivity : ComponentActivity() {
                             modifier = Modifier.background(Color.Black.copy(alpha = 0.5f)).padding(8.dp)
                         ) {
                             Text("Watermark", color = Color.White)
+                            Spacer(modifier = Modifier.width(8.dp))
                             Switch(
                                 checked = isWatermarkEnabled,
                                 onCheckedChange = { isWatermarkEnabled = it },
-                                modifier = Modifier.scale(0.8f)
+                                modifier = Modifier.scale(0.8f) // Menggunakan Modifier.scale resmi dari Compose
                             )
                         }
 
@@ -118,8 +120,8 @@ class MainActivity : ComponentActivity() {
                                 Icon(Icons.Default.Circle, "Shutter", tint = Color.White, modifier = Modifier.size(72.dp))
                             }
 
-                            // Info / Dummy Gallery
-                            IconButton(onClick = { /* Bisa tambah navigasi galeri sistem */ }) {
+                            // Dummy Gallery
+                            IconButton(onClick = { /* Navigasi Galeri */ }) {
                                 Icon(Icons.Default.PhotoLibrary, "Gallery", tint = Color.White)
                             }
                         }
@@ -151,6 +153,11 @@ class MainActivity : ComponentActivity() {
                     saveBitmapToGallery(bitmap)
                     onProcessed(bitmap)
                     image.close()
+                }
+
+                override fun onError(exception: ImageCaptureException) {
+                    super.onError(exception)
+                    Log.e("Camera", "Gagal mengambil foto", exception)
                 }
             }
         )
@@ -195,7 +202,3 @@ class MainActivity : ComponentActivity() {
         private val CAMERAX_PERMISSIONS = arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
     }
 }
-
-// Extension untuk membantu Switch scale
-@Composable
-fun Modifier.scale(scale: Float): Modifier = this.then(androidx.compose.ui.draw.scale(scale))
