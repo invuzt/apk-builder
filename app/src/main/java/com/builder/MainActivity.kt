@@ -1,41 +1,28 @@
 package com.builder
 
 import android.Manifest
+import android.content.ContentValues
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
-import android.graphics.Matrix
+import android.os.Build
 import android.os.Bundle
+import android.provider.MediaStore
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
-import androidx.camera.core.ImageProxy
 import androidx.camera.view.CameraController
 import androidx.camera.view.LifecycleCameraController
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cameraswitch
 import androidx.compose.material.icons.filled.Photo
 import androidx.compose.material.icons.filled.PhotoCamera
-import androidx.compose.material3.BottomSheetScaffold
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.rememberBottomSheetScaffoldState
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -46,6 +33,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.builder.screens.CameraPreview
 import com.builder.screens.PhotoBottomSheetContent
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
@@ -53,9 +42,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         if (!hasRequiredPermissions()) {
-            ActivityCompat.requestPermissions(
-                this, CAMERAX_PERMISSIONS, 0
-            )
+            ActivityCompat.requestPermissions(this, CAMERAX_PERMISSIONS, 0)
         }
 
         setContent {
@@ -63,10 +50,7 @@ class MainActivity : ComponentActivity() {
             val scaffoldState = rememberBottomSheetScaffoldState()
             val controller = remember {
                 LifecycleCameraController(applicationContext).apply {
-                    setEnabledUseCases(
-                        CameraController.IMAGE_CAPTURE or
-                        CameraController.VIDEO_CAPTURE
-                    )
+                    setEnabledUseCases(CameraController.IMAGE_CAPTURE)
                 }
             }
 
@@ -84,17 +68,9 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                 ) { paddingValues ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(paddingValues)
-                    ) {
-                        CameraPreview(
-                            controller = controller,
-                            modifier = Modifier.fillMaxSize()
-                        )
+                    Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
+                        CameraPreview(controller = controller, modifier = Modifier.fillMaxSize())
 
-                        // Tombol Switch Kamera (Putih)
                         IconButton(
                             onClick = {
                                 controller.cameraSelector = 
@@ -104,51 +80,22 @@ class MainActivity : ComponentActivity() {
                             },
                             modifier = Modifier.offset(16.dp, 16.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Cameraswitch,
-                                contentDescription = "Switch Camera",
-                                tint = Color.White // Membuat tombol jadi putih
-                            )
+                            Icon(Icons.Default.Cameraswitch, "Switch", tint = Color.White)
                         }
 
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .align(Alignment.BottomCenter)
-                                .padding(bottom = 48.dp),
+                            modifier = Modifier.fillMaxWidth().align(Alignment.BottomCenter).padding(bottom = 48.dp),
                             horizontalArrangement = Arrangement.SpaceAround
                         ) {
-                            // Tombol Galeri (Putih)
-                            IconButton(
-                                onClick = {
-                                    scope.launch {
-                                        scaffoldState.bottomSheetState.expand()
-                                    }
-                                }
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Photo,
-                                    contentDescription = "Open Gallery",
-                                    tint = Color.White // Membuat tombol jadi putih
-                                )
+                            IconButton(onClick = { scope.launch { scaffoldState.bottomSheetState.expand() } }) {
+                                Icon(Icons.Default.Photo, "Gallery", tint = Color.White)
                             }
 
-                            // Tombol Ambil Foto (Putih & Lebih Besar)
                             IconButton(
-                                onClick = {
-                                    takePhoto(
-                                        controller = controller,
-                                        onPhotoTaken = viewModel::onTakePhoto
-                                    )
-                                },
+                                onClick = { savePhotoToGallery(controller, viewModel) },
                                 modifier = Modifier.size(72.dp)
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.PhotoCamera,
-                                    contentDescription = "Take Photo",
-                                    tint = Color.White, // Membuat tombol jadi putih
-                                    modifier = Modifier.size(54.dp)
-                                )
+                                Icon(Icons.Default.PhotoCamera, "Capture", tint = Color.White, modifier = Modifier.size(54.dp))
                             }
                         }
                     }
@@ -157,36 +104,36 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun takePhoto(
+    private fun savePhotoToGallery(
         controller: LifecycleCameraController,
-        onPhotoTaken: (Bitmap) -> Unit
+        viewModel: MainViewModel
     ) {
+        val name = SimpleDateFormat("yyyy-MM-dd-HH-mm-ss-SSS", Locale.US).format(System.currentTimeMillis())
+        val contentValues = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, name)
+            put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
+            if (Build.VERSION.SDK_INT > Build.VERSION_CODES.P) {
+                put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/CameraX-Photos")
+            }
+        }
+
+        val outputOptions = ImageCapture.OutputFileOptions.Builder(
+            contentResolver,
+            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+            contentValues
+        ).build()
+
         controller.takePicture(
-            ContextCompat.getMainExecutor(applicationContext),
-            object : ImageCapture.OnImageCapturedCallback() {
-                override fun onCaptureSuccess(image: ImageProxy) {
-                    super.onCaptureSuccess(image)
-
-                    val matrix = Matrix().apply {
-                        postRotate(image.imageInfo.rotationDegrees.toFloat())
-                    }
-                    val rotatedBitmap = Bitmap.createBitmap(
-                        image.toBitmap(),
-                        0,
-                        0,
-                        image.width,
-                        image.height,
-                        matrix,
-                        true
-                    )
-
-                    onPhotoTaken(rotatedBitmap)
-                    image.close()
+            outputOptions,
+            ContextCompat.getMainExecutor(this),
+            object : ImageCapture.OnImageSavedCallback {
+                override fun onImageSaved(output: ImageCapture.OutputFileResults) {
+                    Toast.makeText(baseContext, "Foto tersimpan ke Galeri!", Toast.LENGTH_SHORT).show()
+                    // Opsional: Anda tetap bisa mengambil bitmap untuk preview di BottomSheet jika mau
                 }
 
-                override fun onError(exception: ImageCaptureException) {
-                    super.onError(exception)
-                    Log.e("Camera", "Couldn't take photo: ", exception)
+                override fun onError(exc: ImageCaptureException) {
+                    Log.e("Camera", "Gagal menyimpan: ${exc.message}", exc)
                 }
             }
         )
@@ -194,17 +141,18 @@ class MainActivity : ComponentActivity() {
 
     private fun hasRequiredPermissions(): Boolean {
         return CAMERAX_PERMISSIONS.all {
-            ContextCompat.checkSelfPermission(
-                applicationContext,
-                it
-            ) == PackageManager.PERMISSION_GRANTED
+            ContextCompat.checkSelfPermission(applicationContext, it) == PackageManager.PERMISSION_GRANTED
         }
     }
 
     companion object {
         private val CAMERAX_PERMISSIONS = arrayOf(
             Manifest.permission.CAMERA,
-            Manifest.permission.RECORD_AUDIO
-        )
+            Manifest.permission.RECORD_AUDIO,
+            Manifest.permission.WRITE_EXTERNAL_STORAGE
+        ).filter { 
+            // WRITE_EXTERNAL_STORAGE tidak lagi diperlukan di Android 10+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) it != Manifest.permission.WRITE_EXTERNAL_STORAGE else true
+        }.toTypedArray()
     }
 }
