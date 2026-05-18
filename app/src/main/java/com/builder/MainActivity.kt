@@ -55,7 +55,6 @@ class MainActivity : ComponentActivity() {
             var isWatermarkEnabled by remember { mutableStateOf(true) }
             var showFlash by remember { mutableStateOf(false) }
             
-            // Animasi Flash
             val flashAlpha by animateFloatAsState(
                 targetValue = if (showFlash) 1f else 0f,
                 animationSpec = tween(durationMillis = 100),
@@ -70,7 +69,6 @@ class MainActivity : ComponentActivity() {
 
             MaterialTheme {
                 Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-                    // Layer 1: Preview Kamera / Freeze Frame
                     if (previewBitmap != null) {
                         Image(
                             bitmap = previewBitmap!!.asImageBitmap(),
@@ -88,10 +86,8 @@ class MainActivity : ComponentActivity() {
                         CameraPreview(controller = controller, modifier = Modifier.fillMaxSize())
                     }
 
-                    // Layer 2: Visual Flash Effect
                     Box(modifier = Modifier.fillMaxSize().alpha(flashAlpha).background(Color.White))
 
-                    // Layer 3: Overlay Kontrol
                     Column(
                         modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(bottom = 48.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
@@ -116,7 +112,6 @@ class MainActivity : ComponentActivity() {
                             horizontalArrangement = Arrangement.SpaceAround,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // Switch Cam
                             IconButton(onClick = {
                                 controller.cameraSelector = if (controller.cameraSelector == CameraSelector.DEFAULT_BACK_CAMERA)
                                     CameraSelector.DEFAULT_FRONT_CAMERA else CameraSelector.DEFAULT_BACK_CAMERA
@@ -124,7 +119,6 @@ class MainActivity : ComponentActivity() {
                                 Icon(Icons.Default.Cameraswitch, "Switch", tint = Color.White)
                             }
 
-                            // Shutter dengan Efek Flash
                             IconButton(
                                 onClick = {
                                     showFlash = true
@@ -137,7 +131,6 @@ class MainActivity : ComponentActivity() {
                                 Icon(Icons.Default.Circle, "Shutter", tint = Color.White, modifier = Modifier.size(72.dp))
                             }
 
-                            // Shortcut ke Galeri Default Android
                             IconButton(onClick = { openAndroidGallery() }) {
                                 Icon(Icons.Default.PhotoLibrary, "Gallery", tint = Color.White)
                             }
@@ -185,6 +178,11 @@ class MainActivity : ComponentActivity() {
                     }
                     image.close()
                 }
+
+                override fun onError(exception: ImageCaptureException) {
+                    super.onError(exception)
+                    Log.e("Camera", "Gagal mengambil foto", exception)
+                }
             }
         )
     }
@@ -195,7 +193,7 @@ class MainActivity : ComponentActivity() {
             return
         }
         LocationServices.getFusedLocationProviderClient(this).lastLocation
-            .addOnSuccessListener { location -> callback(location) }
+            .addOnSuccessListener { loc: Location? -> callback(loc) }
             .addOnFailureListener { callback(null) }
     }
 
