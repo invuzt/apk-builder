@@ -7,11 +7,21 @@ import java.util.*
 
 object LocationHelper {
     fun getAddress(context: Context, loc: Location?): String {
-        if (loc == null) return "Menunggu sinyal GPS..."
+        if (loc == null) return ""
+        
+        // Cek apakah Geocoder tersedia di HP tersebut
+        if (!Geocoder.isPresent()) return "Fitur peta HP tidak merespon"
+        
         return try {
             val geocoder = Geocoder(context, Locale.getDefault())
             val addresses = geocoder.getFromLocation(loc.latitude, loc.longitude, 1)
-            if (!addresses.isNullOrEmpty()) addresses[0].getAddressLine(0) else "Alamat tidak ditemukan"
-        } catch (e: Exception) { "Gagal sinkron alamat" }
+            if (!addresses.isNullOrEmpty()) {
+                addresses[0].getAddressLine(0)
+            } else {
+                "Area tidak terpetakan"
+            }
+        } catch (e: Exception) {
+            "Gagal memuat nama jalan (Koneksi Lemah)"
+        }
     }
 }

@@ -3,6 +3,7 @@ package com.builder
 import android.content.Intent
 import android.os.Bundle
 import android.os.Looper
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -21,17 +22,15 @@ class MainActivity : ComponentActivity() {
 
     private val locCallback = object : LocationCallback() {
         override fun onLocationResult(res: LocationResult) { 
-            currentLoc = res.lastLocation 
+            res.lastLocation?.let {
+                currentLoc = it
+                Log.d("GPS_SUCCESS", "Koordinat didapat: ${it.latitude}, ${it.longitude}")
+            }
         }
     }
 
-    // PENGATURAN IZIN YANG BENAR & SINKRON
     private val launcher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
-        // Cek apakah izin lokasi diberikan setelah dialog muncul
-        val fineLocGranted = permissions[android.Manifest.permission.ACCESS_FINE_LOCATION] == true
-        val coarseLocGranted = permissions[android.Manifest.permission.ACCESS_COARSE_LOCATION] == true
-        
-        if (fineLocGranted || coarseLocGranted) {
+        if (permissions[android.Manifest.permission.ACCESS_FINE_LOCATION] == true) {
             startLocUpdates()
         }
     }
@@ -40,7 +39,6 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         
-        // Eksekusi pengecekan izin saat aplikasi dibuka
         if (PermissionHandler.hasAllPermissions(this)) {
             startLocUpdates()
         } else {
@@ -72,15 +70,20 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun startLocUpdates() {
-        try {
-            val req = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000)
-                .setMinUpdateIntervalMillis(2000) // Update tiap 2 detik jika bergerak
-                .build()
-                
-            fusedLocationClient.requestLocationUpdates(req, locCallback, Looper.getMainLooper())
-        } catch (e: SecurityException) {
-            // Berjaga-jaga jika izin dicabut paksa oleh sistem
-            e.printStackTrace()
-        }
+        if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) != 0) return
+        
+        // Taktik 1: Paksa minta lokasi instan saat ini juga (Fresh Location)
+        fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
+            .addOnSuccessListener { loc ->
+                if (loc != null) currentLoc = loc
+            }
+
+        // Taktik 2: Minta pembaruan berkala secara agresif
+        val req = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 2000) // Cek tiap 2 detik
+            .setMinUpdateIntervalMillis(1000)
+            .setWaveformPowerUsage(LocationRequest.POWER_USAGE_HIGH) // Gunakan performa penuh GPS hardware
+            .build()
+            
+        fusedLocationClient.requestLocationUpdates(req, locCallback, Looper.getMainLooper())
     }
 }
