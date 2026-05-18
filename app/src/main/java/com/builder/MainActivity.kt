@@ -3,7 +3,7 @@ package com.builder
 import android.Manifest
 import android.content.ContentValues
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
+import android.graphics.*
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
@@ -14,88 +14,113 @@ import androidx.activity.compose.setContent
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
+import androidx.camera.core.ImageProxy
 import androidx.camera.view.CameraController
 import androidx.camera.view.LifecycleCameraController
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Cameraswitch
-import androidx.compose.material.icons.filled.Photo
-import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.builder.screens.CameraPreview
-import com.builder.screens.PhotoBottomSheetContent
-import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
-import java.util.Locale
+import java.util.*
 
 class MainActivity : ComponentActivity() {
-    @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         if (!hasRequiredPermissions()) {
             ActivityCompat.requestPermissions(this, CAMERAX_PERMISSIONS, 0)
         }
 
         setContent {
-            val scope = rememberCoroutineScope()
-            val scaffoldState = rememberBottomSheetScaffoldState()
+            var previewBitmap by remember { mutableStateOf<Bitmap?>(null) }
+            var isWatermarkEnabled by remember { mutableStateOf(true) }
             val controller = remember {
                 LifecycleCameraController(applicationContext).apply {
                     setEnabledUseCases(CameraController.IMAGE_CAPTURE)
                 }
             }
 
-            val viewModel = viewModel<MainViewModel>()
-            val bitmaps by viewModel.bitmaps.collectAsState()
-
             MaterialTheme {
-                BottomSheetScaffold(
-                    scaffoldState = scaffoldState,
-                    sheetPeekHeight = 0.dp,
-                    sheetContent = {
-                        PhotoBottomSheetContent(
-                            bitmaps = bitmaps,
-                            modifier = Modifier.fillMaxWidth()
+                Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+                    // 1. Layer Utama: Viewfinder atau Freeze Frame
+                    if (previewBitmap != null) {
+                        Image(
+                            bitmap = previewBitmap!!.asImageBitmap(),
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
                         )
-                    }
-                ) { paddingValues ->
-                    Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
-                        CameraPreview(controller = controller, modifier = Modifier.fillMaxSize())
-
+                        // Tombol Tutup Preview (Kembali ke Kamera)
                         IconButton(
-                            onClick = {
-                                controller.cameraSelector = 
-                                    if (controller.cameraSelector == CameraSelector.DEFAULT_BACK_CAMERA) {
-                                        CameraSelector.DEFAULT_FRONT_CAMERA
-                                    } else CameraSelector.DEFAULT_BACK_CAMERA
-                            },
-                            modifier = Modifier.offset(16.dp, 16.dp)
+                            onClick = { previewBitmap = null },
+                            modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)
                         ) {
-                            Icon(Icons.Default.Cameraswitch, "Switch", tint = Color.White)
+                            Icon(Icons.Default.Close, "Close", tint = Color.White, modifier = Modifier.size(32.dp))
+                        }
+                    } else {
+                        CameraPreview(controller = controller, modifier = Modifier.fillMaxSize())
+                    }
+
+                    // 2. Overlay Kontrol
+                    Column(
+                        modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(bottom = 48.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        // Toggle Watermark
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.background(Color.Black.copy(alpha = 0.5f)).padding(8.dp)
+                        ) {
+                            Text("Watermark", color = Color.White)
+                            Switch(
+                                checked = isWatermarkEnabled,
+                                onCheckedChange = { isWatermarkEnabled = it },
+                                modifier = Modifier.scale(0.8f)
+                            )
                         }
 
+                        Spacer(modifier = Modifier.height(24.dp))
+
                         Row(
-                            modifier = Modifier.fillMaxWidth().align(Alignment.BottomCenter).padding(bottom = 48.dp),
-                            horizontalArrangement = Arrangement.SpaceAround
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceAround,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            IconButton(onClick = { scope.launch { scaffoldState.bottomSheetState.expand() } }) {
-                                Icon(Icons.Default.Photo, "Gallery", tint = Color.White)
+                            // Switch Cam
+                            IconButton(onClick = {
+                                controller.cameraSelector = if (controller.cameraSelector == CameraSelector.DEFAULT_BACK_CAMERA)
+                                    CameraSelector.DEFAULT_FRONT_CAMERA else CameraSelector.DEFAULT_BACK_CAMERA
+                            }) {
+                                Icon(Icons.Default.Cameraswitch, "Switch", tint = Color.White)
                             }
 
+                            // Shutter
                             IconButton(
-                                onClick = { savePhotoToGallery(controller, viewModel) },
+                                onClick = {
+                                    captureAndProcess(controller, isWatermarkEnabled) { bitmap ->
+                                        previewBitmap = bitmap
+                                    }
+                                },
                                 modifier = Modifier.size(72.dp)
                             ) {
-                                Icon(Icons.Default.PhotoCamera, "Capture", tint = Color.White, modifier = Modifier.size(54.dp))
+                                Icon(Icons.Default.Circle, "Shutter", tint = Color.White, modifier = Modifier.size(72.dp))
+                            }
+
+                            // Info / Dummy Gallery
+                            IconButton(onClick = { /* Bisa tambah navigasi galeri sistem */ }) {
+                                Icon(Icons.Default.PhotoLibrary, "Gallery", tint = Color.White)
                             }
                         }
                     }
@@ -104,55 +129,73 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun savePhotoToGallery(
+    private fun captureAndProcess(
         controller: LifecycleCameraController,
-        viewModel: MainViewModel
+        addWatermark: Boolean,
+        onProcessed: (Bitmap) -> Unit
     ) {
-        val name = SimpleDateFormat("yyyy-MM-dd-HH-mm-ss-SSS", Locale.US).format(System.currentTimeMillis())
-        val contentValues = ContentValues().apply {
-            put(MediaStore.MediaColumns.DISPLAY_NAME, name)
-            put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
-            if (Build.VERSION.SDK_INT > Build.VERSION_CODES.P) {
-                put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/CameraX-Photos")
-            }
-        }
-
-        val outputOptions = ImageCapture.OutputFileOptions.Builder(
-            contentResolver,
-            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-            contentValues
-        ).build()
-
         controller.takePicture(
-            outputOptions,
-            ContextCompat.getMainExecutor(this),
-            object : ImageCapture.OnImageSavedCallback {
-                override fun onImageSaved(output: ImageCapture.OutputFileResults) {
-                    Toast.makeText(baseContext, "Foto tersimpan ke Galeri!", Toast.LENGTH_SHORT).show()
-                    // Opsional: Anda tetap bisa mengambil bitmap untuk preview di BottomSheet jika mau
-                }
+            ContextCompat.getMainExecutor(applicationContext),
+            object : ImageCapture.OnImageCapturedCallback() {
+                override fun onCaptureSuccess(image: ImageProxy) {
+                    var bitmap = image.toBitmap()
+                    
+                    // Perbaiki Rotasi
+                    val matrix = Matrix().apply { postRotate(image.imageInfo.rotationDegrees.toFloat()) }
+                    bitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
 
-                override fun onError(exc: ImageCaptureException) {
-                    Log.e("Camera", "Gagal menyimpan: ${exc.message}", exc)
+                    if (addWatermark) {
+                        bitmap = applyWatermark(bitmap)
+                    }
+
+                    saveBitmapToGallery(bitmap)
+                    onProcessed(bitmap)
+                    image.close()
                 }
             }
         )
     }
 
-    private fun hasRequiredPermissions(): Boolean {
-        return CAMERAX_PERMISSIONS.all {
-            ContextCompat.checkSelfPermission(applicationContext, it) == PackageManager.PERMISSION_GRANTED
+    private fun applyWatermark(source: Bitmap): Bitmap {
+        val result = source.copy(source.config, true)
+        val canvas = Canvas(result)
+        val paint = Paint().apply {
+            color = android.graphics.Color.WHITE
+            textSize = source.width / 25f
+            isAntiAlias = true
+            setShadowLayer(2f, 1f, 1f, android.graphics.Color.BLACK)
+        }
+        val text = "Captured by Vuzt Cam - ${SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())}"
+        canvas.drawText(text, 40f, source.height - 40f, paint)
+        return result
+    }
+
+    private fun saveBitmapToGallery(bitmap: Bitmap) {
+        val name = "Vuzt_${System.currentTimeMillis()}"
+        val contentValues = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, name)
+            put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Vuzt-Camera")
+            }
+        }
+        val uri = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+        uri?.let {
+            contentResolver.openOutputStream(it).use { stream ->
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 95, stream!!)
+            }
         }
     }
 
+    private fun hasRequiredPermissions() = CAMERAX_PERMISSIONS.all {
+        ContextCompat.checkSelfPermission(applicationContext, it) == PackageManager.PERMISSION_GRANTED
+    }
+
     companion object {
-        private val CAMERAX_PERMISSIONS = arrayOf(
-            Manifest.permission.CAMERA,
-            Manifest.permission.RECORD_AUDIO,
-            Manifest.permission.WRITE_EXTERNAL_STORAGE
-        ).filter { 
-            // WRITE_EXTERNAL_STORAGE tidak lagi diperlukan di Android 10+
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) it != Manifest.permission.WRITE_EXTERNAL_STORAGE else true
-        }.toTypedArray()
+        private val CAMERAX_PERMISSIONS = arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
     }
 }
+
+// Extension untuk membantu Switch scale
+@Composable
+fun Modifier.scale(scale: Float): Modifier = this.then(androidx.compose.ui.draw.scale(scale))
