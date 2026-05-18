@@ -12,7 +12,6 @@ import android.provider.MediaStore
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
@@ -46,28 +45,35 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 class MainActivity : ComponentActivity() {
+
+    // Registrasi launcher izin di level class (Native Android)
+    private val requestPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val cameraGranted = permissions[Manifest.permission.CAMERA] == true
+        val gpsGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true
+        
+        if (!cameraGranted) {
+            Toast.makeText(this, "Izin kamera ditolak!", Toast.LENGTH_LONG).show()
+        }
+        if (!gpsGranted) {
+            Toast.makeText(this, "Watermark lokasi tidak akan berfungsi tanpa GPS", Toast.LENGTH_LONG).show()
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Paksa minta izin langsung saat aplikasi start (On Create)
+        if (!hasRequiredPermissions()) {
+            requestPermissionLauncher.launch(REQUIRED_PERMISSIONS)
+        }
         
         setContent {
             var previewBitmap by remember { mutableStateOf<Bitmap?>(null) }
             var isWatermarkEnabled by remember { mutableStateOf(true) }
             var showFlash by remember { mutableStateOf(false) }
             
-            // 1. OTOMASI IZIN GPS SAAT START
-            val permissionLauncher = rememberLauncherForActivityResult(
-                ActivityResultContracts.RequestMultiplePermissions()
-            ) { permissions ->
-                val gpsGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true
-                if (!gpsGranted) {
-                    Toast.makeText(this, "GPS dibutuhkan untuk watermark lokasi", Toast.LENGTH_SHORT).show()
-                }
-            }
-
-            LaunchedEffect(Unit) {
-                permissionLauncher.launch(REQUIRED_PERMISSIONS)
-            }
-
             val flashAlpha by animateFloatAsState(
                 targetValue = if (showFlash) 1f else 0f,
                 animationSpec = tween(durationMillis = 100),
@@ -224,7 +230,6 @@ class MainActivity : ComponentActivity() {
         val locText = if (location != null) "Lat: ${location.latitude}, Lon: ${location.longitude}" else "GPS Unavailable"
         
         val margin = 50f
-        // 2. GANTI NAMA MENJADI CAM RU
         canvas.drawText("CAM RU | $timeStamp", margin, source.height - (margin * 2.5f), paint)
         canvas.drawText(locText, margin, source.height - margin, paint)
         
@@ -246,6 +251,10 @@ class MainActivity : ComponentActivity() {
                 bitmap.compress(Bitmap.CompressFormat.JPEG, 95, stream!!)
             }
         }
+    }
+
+    private fun hasRequiredPermissions() = REQUIRED_PERMISSIONS.all {
+        ContextCompat.checkSelfPermission(applicationContext, it) == PackageManager.PERMISSION_GRANTED
     }
 
     companion object {

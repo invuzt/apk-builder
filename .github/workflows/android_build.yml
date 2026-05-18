@@ -10,6 +10,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    # Memaksa penggunaan Node.js 24 sesuai standar terbaru 2026
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
     steps:
     - uses: actions/checkout@v4
 
@@ -20,13 +24,15 @@ jobs:
         distribution: 'temurin'
         cache: 'gradle'
 
-    - name: Setup Gradle and Build
+    - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v3
       with:
         gradle-version: '8.7'
-        arguments: assembleDebug
 
-    # INI DIA YANG KURANG: Mengamankan file APK hasil build agar bisa didownload
+    # Menjalankan perintah kompilasi langsung (bukan lewat parameter arguments yang usang)
+    - name: Build with Gradle
+      run: gradle assembleDebug
+
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
