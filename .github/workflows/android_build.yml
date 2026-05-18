@@ -3,38 +3,34 @@ name: Android CI
 on:
   push:
     branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
-    # Memaksa penggunaan Node.js 24 sesuai standar terbaru 2026
     env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v4.2.2
 
     - name: set up JDK 17
-      uses: actions/setup-java@v4
+      uses: actions/setup-java@v4.7.0
       with:
         java-version: '17'
         distribution: 'temurin'
-        cache: 'gradle'
+        cache: gradle
 
     - name: Setup Gradle
-      uses: gradle/actions/setup-gradle@v3
-      with:
-        gradle-version: '8.7'
+      uses: gradle/actions/setup-gradle@v4.0.0
 
-    # Menjalankan perintah kompilasi langsung (bukan lewat parameter arguments yang usang)
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+
     - name: Build with Gradle
-      run: gradle assembleDebug
+      run: ./gradlew assembleDebug
 
-    - name: Upload APK Artifact
-      uses: actions/upload-artifact@v4
+    - name: Upload APK
+      uses: actions/upload-artifact@v4.6.0
       with:
-        name: CamRU-Debug-APK
+        name: app-debug
         path: app/build/outputs/apk/debug/app-debug.apk
