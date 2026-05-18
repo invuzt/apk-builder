@@ -5,6 +5,8 @@ import android.content.ContentValues
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.*
+import android.location.Address
+import android.location.Geocoder
 import android.location.Location
 import android.os.Build
 import android.os.Bundle
@@ -26,6 +28,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -33,11 +36,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.builder.screens.CameraPreview
@@ -49,41 +54,23 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var locationCallback: LocationCallback
-    
-    // Variabel global penampung lokasi terkini
     private var currentGPSLocation: Location? = null
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
-        val cameraGranted = permissions[Manifest.permission.CAMERA] == true
-        val gpsGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true
-        
-        if (cameraGranted) {
-            // Restart activity jika baru diberi izin agar engine kamera refresh
-        } else {
-            Toast.makeText(this, "Izin kamera ditolak!", Toast.LENGTH_LONG).show()
-        }
-        
-        if (gpsGranted) {
+        if (permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true) {
             startLocationUpdates()
-        } else {
-            Toast.makeText(this, "Watermark lokasi tidak akan berfungsi tanpa GPS", Toast.LENGTH_LONG).show()
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
 
-        // Setup langganan perubahan lokasi seperti di video referensi
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(locationResult: LocationResult) {
-                for (location in locationResult.locations) {
-                    currentGPSLocation = location
-                    Log.d("GPS_TRACKER", "Lokasi Baru Diterima: ${location.latitude}, ${location.longitude}")
-                }
+                currentGPSLocation = locationResult.lastLocation
             }
         }
 
@@ -96,6 +83,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             var previewBitmap by remember { mutableStateOf<Bitmap?>(null) }
             var isWatermarkEnabled by remember { mutableStateOf(true) }
+            var isHighQuality by remember { mutableStateOf(true) }
             var showFlash by remember { mutableStateOf(false) }
             
             val flashAlpha by animateFloatAsState(
@@ -132,15 +120,27 @@ class MainActivity : ComponentActivity() {
                     Box(modifier = Modifier.fillMaxSize().alpha(flashAlpha).background(Color.White))
 
                     Column(
-                        modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(bottom = 48.dp),
+                        modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(bottom = 32.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
+                        // Pengaturan UI (Watermark & Kualitas)
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.background(Color.Black.copy(alpha = 0.5f)).padding(horizontal = 12.dp, vertical = 4.dp)
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(Color.Black.copy(alpha = 0.6f))
+                                .padding(horizontal = 16.dp, vertical = 8.dp)
                         ) {
-                            Text("Watermark Lokasi", color = Color.White, style = MaterialTheme.typography.bodySmall)
-                            Spacer(modifier = Modifier.width(8.dp))
+                            // Kualitas Toggle
+                            Text(if (isHighQuality) "HIGH" else "LOW", color = Color.White, fontSize = 12.sp)
+                            Switch(
+                                checked = isHighQuality,
+                                onCheckedChange = { isHighQuality = it },
+                                modifier = Modifier.scale(0.7f)
+                            )
+                            Spacer(modifier = Modifier.width(16.dp))
+                            // Watermark Toggle
+                            Icon(Icons.Default.LocationOn, null, tint = Color.White, modifier = Modifier.size(16.dp))
                             Switch(
                                 checked = isWatermarkEnabled,
                                 onCheckedChange = { isWatermarkEnabled = it },
@@ -165,13 +165,13 @@ class MainActivity : ComponentActivity() {
                             IconButton(
                                 onClick = {
                                     showFlash = true
-                                    captureAndProcess(controller, isWatermarkEnabled) { bitmap ->
+                                    captureAndProcess(controller, isWatermarkEnabled, isHighQuality) { bitmap ->
                                         previewBitmap = bitmap
                                     }
                                 },
-                                modifier = Modifier.size(72.dp)
+                                modifier = Modifier.size(80.dp)
                             ) {
-                                Icon(Icons.Default.Circle, "Shutter", tint = Color.White, modifier = Modifier.size(72.dp))
+                                Icon(Icons.Default.Circle, "Shutter", tint = Color.White, modifier = Modifier.size(80.dp))
                             }
 
                             IconButton(onClick = { openAndroidGallery() }) {
@@ -185,20 +185,9 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun startLocationUpdates() {
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            return
-        }
-
-        // Setup interval request (minta lokasi tiap 5 detik sekali dengan akurasi tinggi)
-        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000)
-            .setMinUpdateIntervalMillis(2000)
-            .build()
-
-        fusedLocationClient.requestLocationUpdates(
-            locationRequest,
-            locationCallback,
-            Looper.getMainLooper()
-        )
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) return
+        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000).build()
+        fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper())
     }
 
     private fun openAndroidGallery() {
@@ -206,16 +195,13 @@ class MainActivity : ComponentActivity() {
             type = "image/*"
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
         }
-        try {
-            startActivity(intent)
-        } catch (e: Exception) {
-            Toast.makeText(this, "Tidak dapat membuka galeri", Toast.LENGTH_SHORT).show()
-        }
+        startActivity(intent)
     }
 
     private fun captureAndProcess(
         controller: LifecycleCameraController,
         addWatermark: Boolean,
+        highQuality: Boolean,
         onProcessed: (Bitmap) -> Unit
     ) {
         controller.takePicture(
@@ -227,84 +213,110 @@ class MainActivity : ComponentActivity() {
                     bitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
 
                     if (addWatermark) {
-                        // Menggunakan lokasi yang saat ini dipegang oleh tracker background aktif
-                        val watermarked = applyWatermark(bitmap, currentGPSLocation)
-                        saveBitmapToGallery(watermarked)
+                        val address = getAddressFromLoc(currentGPSLocation)
+                        val watermarked = applyWatermark(bitmap, currentGPSLocation, address)
+                        saveBitmapToGallery(watermarked, highQuality)
                         onProcessed(watermarked)
                     } else {
-                        saveBitmapToGallery(bitmap)
+                        saveBitmapToGallery(bitmap, highQuality)
                         onProcessed(bitmap)
                     }
                     image.close()
                 }
-
-                override fun onError(exception: ImageCaptureException) {
-                    super.onError(exception)
-                    Log.e("Camera", "Gagal mengambil foto", exception)
-                }
+                override fun onError(exception: ImageCaptureException) { Log.e("Cam", "Error", exception) }
             }
         )
     }
 
-    private fun applyWatermark(source: Bitmap, location: Location?): Bitmap {
+    private fun getAddressFromLoc(loc: Location?): String {
+        if (loc == null) return "Mencari alamat..."
+        return try {
+            val geocoder = Geocoder(this, Locale.getDefault())
+            val addresses: List<Address>? = geocoder.getFromLocation(loc.latitude, loc.longitude, 1)
+            if (!addresses.isNullOrEmpty()) {
+                addresses[0].getAddressLine(0) // Alamat lengkap
+            } else "Alamat tidak ditemukan"
+        } catch (e: Exception) {
+            "Gagal memuat alamat"
+        }
+    }
+
+    private fun applyWatermark(source: Bitmap, location: Location?, address: String): Bitmap {
         val result = source.copy(source.config, true)
         val canvas = Canvas(result)
+        
+        // Setup Paint untuk Text
         val paint = Paint().apply {
             color = android.graphics.Color.WHITE
-            textSize = source.width / 28f
+            textSize = source.width / 32f
             isAntiAlias = true
-            setShadowLayer(3f, 2f, 2f, android.graphics.Color.BLACK)
+            setShadowLayer(4f, 2f, 2f, android.graphics.Color.BLACK)
         }
         
         val timeStamp = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault()).format(Date())
-        val locText = if (location != null) "Lat: ${location.latitude}, Lon: ${location.longitude}" else "GPS Locking..."
+        val coords = if (location != null) "${location.latitude}, ${location.longitude}" else "GPS Locking..."
         
-        val margin = 50f
-        canvas.drawText("CAM RU | $timeStamp", margin, source.height - (margin * 2.5f), paint)
-        canvas.drawText(locText, margin, source.height - margin, paint)
+        val margin = 60f
+        val lineSpacing = 1.4f
+        
+        // Menggambar text (Tanpa Cam RU)
+        canvas.drawText(timeStamp, margin, source.height - (margin * 3.5f), paint)
+        canvas.drawText(coords, margin, source.height - (margin * 2.2f), paint)
+        
+        // Bungkus alamat agar tidak terlalu panjang ke samping
+        val addressPaint = Paint(paint).apply { textSize = source.width / 38f }
+        val maxWidth = source.width - (margin * 2)
+        drawMultilineText(canvas, address, margin, source.height - margin, addressPaint, maxWidth.toInt())
         
         return result
     }
 
-    private fun saveBitmapToGallery(bitmap: Bitmap) {
-        val name = "CAMRU_${System.currentTimeMillis()}"
+    private fun drawMultilineText(canvas: Canvas, text: String, x: Float, y: Float, paint: Paint, maxWidth: Int) {
+        val words = text.split(" ")
+        var line = ""
+        var currentY = y
+        
+        for (word in words) {
+            val testLine = if (line.isEmpty()) word else "$line $word"
+            if (paint.measureText(testLine) < maxWidth) {
+                line = testLine
+            } else {
+                canvas.drawText(line, x, currentY - paint.textSize, paint)
+                line = word
+                // currentY -= paint.textSize * 1.2f // Gambar ke atas (Stacking)
+            }
+        }
+        canvas.drawText(line, x, currentY, paint)
+    }
+
+    private fun saveBitmapToGallery(bitmap: Bitmap, highQuality: Boolean) {
+        val quality = if (highQuality) 100 else 50
+        val name = "IMG_${System.currentTimeMillis()}"
         val contentValues = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, name)
             put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/CamRU-Camera")
+                put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/CamRU")
             }
         }
         val uri = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
         uri?.let {
             contentResolver.openOutputStream(it).use { stream ->
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 95, stream!!)
+                bitmap.compress(Bitmap.CompressFormat.JPEG, quality, stream!!)
             }
         }
     }
 
     private fun hasRequiredPermissions() = REQUIRED_PERMISSIONS.all {
-        ContextCompat.checkSelfPermission(applicationContext, it) == PackageManager.PERMISSION_GRANTED
+        ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
     }
 
-    override fun onPause() {
-        super.onPause()
-        // Matikan pelacakan saat aplikasi ditutup/minimize demi hemat baterai
-        fusedLocationClient.removeLocationUpdates(locationCallback)
-    }
-
-    override fun onResume() {
-        super.onResume()
-        // Hidupkan kembali pelacakan saat aplikasi dibuka lagi
-        if (hasRequiredPermissions()) {
-            startLocationUpdates()
-        }
-    }
+    override fun onResume() { super.onResume() ; if (hasRequiredPermissions()) startLocationUpdates() }
+    override fun onPause() { super.onPause() ; fusedLocationClient.removeLocationUpdates(locationCallback) }
 
     companion object {
         private val REQUIRED_PERMISSIONS = arrayOf(
             Manifest.permission.CAMERA,
-            Manifest.permission.RECORD_AUDIO,
             Manifest.permission.ACCESS_FINE_LOCATION,
             Manifest.permission.ACCESS_COARSE_LOCATION
         )
