@@ -27,8 +27,11 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -59,11 +62,10 @@ class MainActivity : ComponentActivity() {
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
-        if (permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true) {
-            startLocationUpdates()
-        }
+        if (permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true) startLocationUpdates()
     }
 
+    @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
@@ -82,10 +84,19 @@ class MainActivity : ComponentActivity() {
         
         setContent {
             var previewBitmap by remember { mutableStateOf<Bitmap?>(null) }
-            var isWatermarkEnabled by remember { mutableStateOf(true) }
             var isHighQuality by remember { mutableStateOf(true) }
             var showFlash by remember { mutableStateOf(false) }
             
+            // Watermark States
+            var showTime by remember { mutableStateOf(true) }
+            var showDate by remember { mutableStateOf(true) }
+            var showCoords by remember { mutableStateOf(true) }
+            var showAddress by remember { mutableStateOf(true) }
+            var customText by remember { mutableStateOf("") }
+            
+            var showSettings by remember { mutableStateOf(false) }
+            val sheetState = rememberModalBottomSheetState()
+
             val flashAlpha by animateFloatAsState(
                 targetValue = if (showFlash) 1f else 0f,
                 animationSpec = tween(durationMillis = 100),
@@ -119,37 +130,21 @@ class MainActivity : ComponentActivity() {
 
                     Box(modifier = Modifier.fillMaxSize().alpha(flashAlpha).background(Color.White))
 
+                    // Floating Settings Button
+                    SmallFloatingActionButton(
+                        onClick = { showSettings = true },
+                        modifier = Modifier.align(Alignment.TopStart).padding(16.dp),
+                        containerColor = Color.Black.copy(alpha = 0.5f),
+                        contentColor = Color.White
+                    ) {
+                        Icon(Icons.Default.Settings, "Settings")
+                    }
+
+                    // Bottom UI
                     Column(
                         modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(bottom = 32.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // Pengaturan UI (Watermark & Kualitas)
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(20.dp))
-                                .background(Color.Black.copy(alpha = 0.6f))
-                                .padding(horizontal = 16.dp, vertical = 8.dp)
-                        ) {
-                            // Kualitas Toggle
-                            Text(if (isHighQuality) "HIGH" else "LOW", color = Color.White, fontSize = 12.sp)
-                            Switch(
-                                checked = isHighQuality,
-                                onCheckedChange = { isHighQuality = it },
-                                modifier = Modifier.scale(0.7f)
-                            )
-                            Spacer(modifier = Modifier.width(16.dp))
-                            // Watermark Toggle
-                            Icon(Icons.Default.LocationOn, null, tint = Color.White, modifier = Modifier.size(16.dp))
-                            Switch(
-                                checked = isWatermarkEnabled,
-                                onCheckedChange = { isWatermarkEnabled = it },
-                                modifier = Modifier.scale(0.7f)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(24.dp))
-
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceAround,
@@ -165,9 +160,11 @@ class MainActivity : ComponentActivity() {
                             IconButton(
                                 onClick = {
                                     showFlash = true
-                                    captureAndProcess(controller, isWatermarkEnabled, isHighQuality) { bitmap ->
-                                        previewBitmap = bitmap
-                                    }
+                                    captureAndProcess(
+                                        controller, 
+                                        isHighQuality, 
+                                        showTime, showDate, showCoords, showAddress, customText
+                                    ) { bitmap -> previewBitmap = bitmap }
                                 },
                                 modifier = Modifier.size(80.dp)
                             ) {
@@ -179,8 +176,61 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     }
+
+                    // Settings Bottom Sheet
+                    if (showSettings) {
+                        ModalBottomSheet(
+                            onDismissRequest = { showSettings = false },
+                            sheetState = sheetState,
+                            containerColor = Color(0xFF1A1A1A),
+                            contentColor = Color.White
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp)
+                                    .verticalScroll(rememberScrollState())
+                            ) {
+                                Text("Watermark Settings", fontSize = 20.sp, modifier = Modifier.padding(bottom = 16.dp))
+                                
+                                SettingItem("Kualitas Tinggi (High)", isHighQuality) { isHighQuality = it }
+                                HorizontalDivider(color = Color.Gray.copy(alpha = 0.3f))
+                                SettingItem("Tampilkan Waktu (Jam)", showTime) { showTime = it }
+                                SettingItem("Tampilkan Hari & Tanggal", showDate) { showDate = it }
+                                SettingItem("Tampilkan Koordinat Lat/Long", showCoords) { showCoords = it }
+                                SettingItem("Tampilkan Alamat Lengkap", showAddress) { showAddress = it }
+                                
+                                Spacer(modifier = Modifier.height(16.dp))
+                                OutlinedTextField(
+                                    value = customText,
+                                    onValueChange = { customText = it },
+                                    label = { Text("Teks Kustom (Opsional)", color = Color.LightGray) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = Color.White,
+                                        unfocusedBorderColor = Color.Gray,
+                                        focusedTextColor = Color.White,
+                                        unfocusedTextColor = Color.White
+                                    )
+                                )
+                                Spacer(modifier = Modifier.height(32.dp))
+                            }
+                        }
+                    }
                 }
             }
+        }
+    }
+
+    @Composable
+    fun SettingItem(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(label, fontSize = 14.sp)
+            Switch(checked = checked, onCheckedChange = onCheckedChange, modifier = Modifier.scale(0.8f))
         }
     }
 
@@ -191,17 +241,14 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun openAndroidGallery() {
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            type = "image/*"
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        }
+        val intent = Intent(Intent.ACTION_VIEW).apply { type = "image/*" ; flags = Intent.FLAG_ACTIVITY_NEW_TASK }
         startActivity(intent)
     }
 
     private fun captureAndProcess(
         controller: LifecycleCameraController,
-        addWatermark: Boolean,
         highQuality: Boolean,
+        sTime: Boolean, sDate: Boolean, sCoords: Boolean, sAddress: Boolean, cText: String,
         onProcessed: (Bitmap) -> Unit
     ) {
         controller.takePicture(
@@ -212,15 +259,11 @@ class MainActivity : ComponentActivity() {
                     val matrix = Matrix().apply { postRotate(image.imageInfo.rotationDegrees.toFloat()) }
                     bitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
 
-                    if (addWatermark) {
-                        val address = getAddressFromLoc(currentGPSLocation)
-                        val watermarked = applyWatermark(bitmap, currentGPSLocation, address)
-                        saveBitmapToGallery(watermarked, highQuality)
-                        onProcessed(watermarked)
-                    } else {
-                        saveBitmapToGallery(bitmap, highQuality)
-                        onProcessed(bitmap)
-                    }
+                    val address = if (sAddress) getAddressFromLoc(currentGPSLocation) else ""
+                    val watermarked = applyWatermark(bitmap, currentGPSLocation, address, sTime, sDate, sCoords, sAddress, cText)
+                    
+                    saveBitmapToGallery(watermarked, highQuality)
+                    onProcessed(watermarked)
                     image.close()
                 }
                 override fun onError(exception: ImageCaptureException) { Log.e("Cam", "Error", exception) }
@@ -229,64 +272,89 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun getAddressFromLoc(loc: Location?): String {
-        if (loc == null) return "Mencari alamat..."
+        if (loc == null) return "Searching address..."
         return try {
             val geocoder = Geocoder(this, Locale.getDefault())
             val addresses: List<Address>? = geocoder.getFromLocation(loc.latitude, loc.longitude, 1)
-            if (!addresses.isNullOrEmpty()) {
-                addresses[0].getAddressLine(0) // Alamat lengkap
-            } else "Alamat tidak ditemukan"
-        } catch (e: Exception) {
-            "Gagal memuat alamat"
-        }
+            addresses?.get(0)?.getAddressLine(0) ?: "Address not found"
+        } catch (e: Exception) { "Signal weak for address" }
     }
 
-    private fun applyWatermark(source: Bitmap, location: Location?, address: String): Bitmap {
+    private fun applyWatermark(
+        source: Bitmap, location: Location?, address: String,
+        sTime: Boolean, sDate: Boolean, sCoords: Boolean, sAddress: Boolean, cText: String
+    ): Bitmap {
         val result = source.copy(source.config, true)
         val canvas = Canvas(result)
-        
-        // Setup Paint untuk Text
         val paint = Paint().apply {
             color = android.graphics.Color.WHITE
             textSize = source.width / 32f
             isAntiAlias = true
-            setShadowLayer(4f, 2f, 2f, android.graphics.Color.BLACK)
+            setShadowLayer(5f, 2f, 2f, android.graphics.Color.BLACK)
         }
         
-        val timeStamp = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault()).format(Date())
-        val coords = if (location != null) "${location.latitude}, ${location.longitude}" else "GPS Locking..."
-        
         val margin = 60f
-        val lineSpacing = 1.4f
+        var currentY = source.height - margin
         
-        // Menggambar text (Tanpa Cam RU)
-        canvas.drawText(timeStamp, margin, source.height - (margin * 3.5f), paint)
-        canvas.drawText(coords, margin, source.height - (margin * 2.2f), paint)
+        // Render dari Bawah ke Atas (Stacking) untuk mencegah tumpang tindih
         
-        // Bungkus alamat agar tidak terlalu panjang ke samping
-        val addressPaint = Paint(paint).apply { textSize = source.width / 38f }
-        val maxWidth = source.width - (margin * 2)
-        drawMultilineText(canvas, address, margin, source.height - margin, addressPaint, maxWidth.toInt())
+        // 1. Alamat (Paling Bawah)
+        if (sAddress && address.isNotEmpty()) {
+            val addrPaint = Paint(paint).apply { textSize = source.width / 40f }
+            currentY = drawMultilineText(canvas, address, margin, currentY, addrPaint, (source.width - margin*2).toInt())
+            currentY -= 20f
+        }
+        
+        // 2. Koordinat
+        if (sCoords && location != null) {
+            canvas.drawText("${location.latitude}, ${location.longitude}", margin, currentY, paint)
+            currentY -= paint.textSize * 1.3f
+        }
+        
+        // 3. Waktu & Tanggal
+        val timeStr = if (sTime) SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date()) else ""
+        val dateStr = if (sDate) SimpleDateFormat("EEEE, dd MMM yyyy", Locale.getDefault()).format(Date()) else ""
+        val combinedDateTime = listOf(dateStr, timeStr).filter { it.isNotEmpty() }.joinToString(" | ")
+        
+        if (combinedDateTime.isNotEmpty()) {
+            canvas.drawText(combinedDateTime, margin, currentY, paint)
+            currentY -= paint.textSize * 1.3f
+        }
+        
+        // 4. Custom Text (Paling Atas)
+        if (cText.isNotEmpty()) {
+            val customPaint = Paint(paint).apply { 
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                color = android.graphics.Color.YELLOW // Warna beda untuk custom text
+            }
+            canvas.drawText(cText.uppercase(), margin, currentY, customPaint)
+        }
         
         return result
     }
 
-    private fun drawMultilineText(canvas: Canvas, text: String, x: Float, y: Float, paint: Paint, maxWidth: Int) {
+    private fun drawMultilineText(canvas: Canvas, text: String, x: Float, y: Float, paint: Paint, maxWidth: Int): Float {
         val words = text.split(" ")
-        var line = ""
-        var currentY = y
+        val lines = mutableListOf<String>()
+        var currentLine = ""
         
         for (word in words) {
-            val testLine = if (line.isEmpty()) word else "$line $word"
+            val testLine = if (currentLine.isEmpty()) word else "$currentLine $word"
             if (paint.measureText(testLine) < maxWidth) {
-                line = testLine
+                currentLine = testLine
             } else {
-                canvas.drawText(line, x, currentY - paint.textSize, paint)
-                line = word
-                // currentY -= paint.textSize * 1.2f // Gambar ke atas (Stacking)
+                lines.add(currentLine)
+                currentLine = word
             }
         }
-        canvas.drawText(line, x, currentY, paint)
+        lines.add(currentLine)
+        
+        var tempY = y
+        for (i in lines.indices.reversed()) {
+            canvas.drawText(lines[i], x, tempY, paint)
+            if (i != 0) tempY -= paint.textSize * 1.2f
+        }
+        return tempY - paint.textSize // Mengembalikan posisi Y terakhir untuk elemen berikutnya
     }
 
     private fun saveBitmapToGallery(bitmap: Bitmap, highQuality: Boolean) {
@@ -295,9 +363,7 @@ class MainActivity : ComponentActivity() {
         val contentValues = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, name)
             put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/CamRU")
-            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/CamRU")
         }
         val uri = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
         uri?.let {
@@ -311,14 +377,7 @@ class MainActivity : ComponentActivity() {
         ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
     }
 
-    override fun onResume() { super.onResume() ; if (hasRequiredPermissions()) startLocationUpdates() }
-    override fun onPause() { super.onPause() ; fusedLocationClient.removeLocationUpdates(locationCallback) }
-
     companion object {
-        private val REQUIRED_PERMISSIONS = arrayOf(
-            Manifest.permission.CAMERA,
-            Manifest.permission.ACCESS_FINE_LOCATION,
-            Manifest.permission.ACCESS_COARSE_LOCATION
-        )
+        private val REQUIRED_PERMISSIONS = arrayOf(Manifest.permission.CAMERA, Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
     }
 }
