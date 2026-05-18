@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cameraswitch
 import androidx.compose.material.icons.filled.Photo
@@ -29,6 +30,7 @@ import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.rememberBottomSheetScaffoldState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -36,6 +38,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -70,73 +73,83 @@ class MainActivity : ComponentActivity() {
             val viewModel = viewModel<MainViewModel>()
             val bitmaps by viewModel.bitmaps.collectAsState()
 
-            BottomSheetScaffold(
-                scaffoldState = scaffoldState,
-                sheetPeekHeight = 0.dp,
-                sheetContent = {
-                    PhotoBottomSheetContent(
-                        bitmaps = bitmaps,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            ) { paddingValues ->
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues)
-                ) {
-                    CameraPreview(
-                        controller = controller,
-                        modifier = Modifier.fillMaxSize()
-                    )
-
-                    IconButton(
-                        onClick = {
-                            controller.cameraSelector = 
-                                if (controller.cameraSelector == CameraSelector.DEFAULT_BACK_CAMERA) {
-                                    CameraSelector.DEFAULT_FRONT_CAMERA
-                                } else CameraSelector.DEFAULT_BACK_CAMERA
-                        },
-                        modifier = Modifier.offset(16.dp, 16.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Cameraswitch,
-                            contentDescription = "Switch Camera"
+            MaterialTheme {
+                BottomSheetScaffold(
+                    scaffoldState = scaffoldState,
+                    sheetPeekHeight = 0.dp,
+                    sheetContent = {
+                        PhotoBottomSheetContent(
+                            bitmaps = bitmaps,
+                            modifier = Modifier.fillMaxWidth()
                         )
                     }
-
-                    Row(
+                ) { paddingValues ->
+                    Box(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .align(Alignment.BottomCenter)
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceAround
+                            .fillMaxSize()
+                            .padding(paddingValues)
                     ) {
+                        CameraPreview(
+                            controller = controller,
+                            modifier = Modifier.fillMaxSize()
+                        )
+
+                        // Tombol Switch Kamera (Putih)
                         IconButton(
                             onClick = {
-                                scope.launch {
-                                    scaffoldState.bottomSheetState.expand()
-                                }
-                            }
+                                controller.cameraSelector = 
+                                    if (controller.cameraSelector == CameraSelector.DEFAULT_BACK_CAMERA) {
+                                        CameraSelector.DEFAULT_FRONT_CAMERA
+                                    } else CameraSelector.DEFAULT_BACK_CAMERA
+                            },
+                            modifier = Modifier.offset(16.dp, 16.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Photo,
-                                contentDescription = "Open Gallery"
+                                imageVector = Icons.Default.Cameraswitch,
+                                contentDescription = "Switch Camera",
+                                tint = Color.White // Membuat tombol jadi putih
                             )
                         }
 
-                        IconButton(
-                            onClick = {
-                                takePhoto(
-                                    controller = controller,
-                                    onPhotoTaken = viewModel::onTakePhoto
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = 48.dp),
+                            horizontalArrangement = Arrangement.SpaceAround
+                        ) {
+                            // Tombol Galeri (Putih)
+                            IconButton(
+                                onClick = {
+                                    scope.launch {
+                                        scaffoldState.bottomSheetState.expand()
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Photo,
+                                    contentDescription = "Open Gallery",
+                                    tint = Color.White // Membuat tombol jadi putih
                                 )
                             }
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.PhotoCamera,
-                                contentDescription = "Take Photo"
-                            )
+
+                            // Tombol Ambil Foto (Putih & Lebih Besar)
+                            IconButton(
+                                onClick = {
+                                    takePhoto(
+                                        controller = controller,
+                                        onPhotoTaken = viewModel::onTakePhoto
+                                    )
+                                },
+                                modifier = Modifier.size(72.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.PhotoCamera,
+                                    contentDescription = "Take Photo",
+                                    tint = Color.White, // Membuat tombol jadi putih
+                                    modifier = Modifier.size(54.dp)
+                                )
+                            }
                         }
                     }
                 }
