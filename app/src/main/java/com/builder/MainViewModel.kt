@@ -3,11 +3,12 @@ package com.builder
 import android.graphics.Bitmap
 import androidx.lifecycle.ViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.AsStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 class MainViewModel: ViewModel() {
     private val _bitmaps = MutableStateFlow<List<Bitmap>>(emptyList())
-    val bitmaps = _bitmaps.AsStateFlow()
+    // Diperbaiki menggunakan huruf kecil di awal: asStateFlow()
+    val bitmaps = _bitmaps.asStateFlow()
 
     fun onTakePhoto(bitmap: Bitmap) {
         _bitmaps.value = _bitmaps.value + bitmap
