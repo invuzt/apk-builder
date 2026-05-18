@@ -12,7 +12,9 @@ import android.provider.MediaStore
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
@@ -46,15 +48,26 @@ import java.util.*
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (!hasRequiredPermissions()) {
-            ActivityCompat.requestPermissions(this, REQUIRED_PERMISSIONS, 0)
-        }
-
+        
         setContent {
             var previewBitmap by remember { mutableStateOf<Bitmap?>(null) }
             var isWatermarkEnabled by remember { mutableStateOf(true) }
             var showFlash by remember { mutableStateOf(false) }
             
+            // 1. OTOMASI IZIN GPS SAAT START
+            val permissionLauncher = rememberLauncherForActivityResult(
+                ActivityResultContracts.RequestMultiplePermissions()
+            ) { permissions ->
+                val gpsGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true
+                if (!gpsGranted) {
+                    Toast.makeText(this, "GPS dibutuhkan untuk watermark lokasi", Toast.LENGTH_SHORT).show()
+                }
+            }
+
+            LaunchedEffect(Unit) {
+                permissionLauncher.launch(REQUIRED_PERMISSIONS)
+            }
+
             val flashAlpha by animateFloatAsState(
                 targetValue = if (showFlash) 1f else 0f,
                 animationSpec = tween(durationMillis = 100),
@@ -96,7 +109,7 @@ class MainActivity : ComponentActivity() {
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.background(Color.Black.copy(alpha = 0.5f)).padding(horizontal = 12.dp, vertical = 4.dp)
                         ) {
-                            Text("Watermark GPS", color = Color.White, style = MaterialTheme.typography.bodySmall)
+                            Text("Watermark Lokasi", color = Color.White, style = MaterialTheme.typography.bodySmall)
                             Spacer(modifier = Modifier.width(8.dp))
                             Switch(
                                 checked = isWatermarkEnabled,
@@ -211,19 +224,20 @@ class MainActivity : ComponentActivity() {
         val locText = if (location != null) "Lat: ${location.latitude}, Lon: ${location.longitude}" else "GPS Unavailable"
         
         val margin = 50f
-        canvas.drawText("Vuzt Cam | $timeStamp", margin, source.height - (margin * 2.5f), paint)
+        // 2. GANTI NAMA MENJADI CAM RU
+        canvas.drawText("CAM RU | $timeStamp", margin, source.height - (margin * 2.5f), paint)
         canvas.drawText(locText, margin, source.height - margin, paint)
         
         return result
     }
 
     private fun saveBitmapToGallery(bitmap: Bitmap) {
-        val name = "Vuzt_${System.currentTimeMillis()}"
+        val name = "CAMRU_${System.currentTimeMillis()}"
         val contentValues = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, name)
             put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Vuzt-Camera")
+                put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/CamRU-Camera")
             }
         }
         val uri = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
@@ -232,10 +246,6 @@ class MainActivity : ComponentActivity() {
                 bitmap.compress(Bitmap.CompressFormat.JPEG, 95, stream!!)
             }
         }
-    }
-
-    private fun hasRequiredPermissions() = REQUIRED_PERMISSIONS.all {
-        ContextCompat.checkSelfPermission(applicationContext, it) == PackageManager.PERMISSION_GRANTED
     }
 
     companion object {
