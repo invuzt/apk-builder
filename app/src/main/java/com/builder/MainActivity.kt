@@ -41,12 +41,13 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.builder.screens.CameraPreview
 import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
+import com.google.android.gms.tasks.CancellationTokenSource
 import java.text.SimpleDateFormat
 import java.util.*
 
 class MainActivity : ComponentActivity() {
 
-    // Registrasi launcher izin di level class (Native Android)
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -64,7 +65,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // Paksa minta izin langsung saat aplikasi start (On Create)
         if (!hasRequiredPermissions()) {
             requestPermissionLauncher.launch(REQUIRED_PERMISSIONS)
         }
@@ -211,9 +211,23 @@ class MainActivity : ComponentActivity() {
             callback(null)
             return
         }
-        LocationServices.getFusedLocationProviderClient(this).lastLocation
-            .addOnSuccessListener { loc: Location? -> callback(loc) }
-            .addOnFailureListener { callback(null) }
+        
+        val fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+        
+        // Coba ambil lokasi terakhir dari cache dulu demi kecepatan
+        fusedLocationClient.lastLocation.addOnSuccessListener { cachedLocation ->
+            if (cachedLocation != null) {
+                callback(cachedLocation)
+            } else {
+                // JIKA CACHE KOSONG: Paksa cari lokasi baru secara akurat (High Accuracy)
+                val cts = CancellationTokenSource()
+                fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, cts.token)
+                    .addOnSuccessListener { freshLocation -> callback(freshLocation) }
+                    .addOnFailureListener { callback(null) }
+            }
+        }.addOnFailureListener {
+            callback(null)
+        }
     }
 
     private fun applyWatermark(source: Bitmap, location: Location?): Bitmap {
@@ -227,7 +241,7 @@ class MainActivity : ComponentActivity() {
         }
         
         val timeStamp = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault()).format(Date())
-        val locText = if (location != null) "Lat: ${location.latitude}, Lon: ${location.longitude}" else "GPS Unavailable"
+        val locText = if (location != null) "Lat: ${location.latitude}, Lon: ${location.longitude}" else "Searching GPS..."
         
         val margin = 50f
         canvas.drawText("CAM RU | $timeStamp", margin, source.height - (margin * 2.5f), paint)
