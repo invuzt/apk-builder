@@ -1,8 +1,8 @@
-name: Android CI
+name: Android CI with Rust NDK
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "feat-rust-core", "main" ]
 
 jobs:
   build:
@@ -13,28 +13,48 @@ jobs:
     steps:
     - uses: actions/checkout@v4.2.2
 
-    - name: set up JDK 17
+    - name: Set up JDK 17
       uses: actions/setup-java@v4.7.0
       with:
         java-version: '17'
         distribution: 'temurin'
+
+    # Langkah Baru: Install Rust Toolchain untuk Android (Arm64 dan x86_64)
+    - name: Set up Rust Toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: stable
+        targets: aarch64-linux-android, x86_64-linux-android
+
+    # Langkah Baru: Install cargo-ndk untuk memudahkan cross-compile ke Android
+    - name: Install cargo-ndk
+      run: cargo install cargo-ndk
 
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v4.0.0
       with:
         gradle-version: '8.7'
 
-    - name: Build with Gradle
+    # Langkah Baru: Kompilasi kode Rust menjadi .so sebelum Gradle merakit APK
+    - name: Build Rust Native Library
+      run: |
+        cd app/src/main/rust
+        # Compile untuk arsitektur HP modern (Arm64-v8a)
+        cargo ndk --target aarch64-linux-android build --release
+        
+        # Pindahkan hasil compile .so ke folder jniLibs Android agar otomatis dibungkus ke APK
+        mkdir -p ../jniLibs/arm64-v8a
+        cp target/aarch64-linux-android/release/librust_engine.so ../jniLibs/arm64-v8a/
+
+    - name: Build Android APK with Gradle
       run: |
         APP_PATH=$(find . -name "build.gradle" -exec grep -l "com.android.application" {} \;)
         PROJECT_ROOT=$(dirname $(dirname "$APP_PATH"))
         cd "$PROJECT_ROOT"
-        
-        # Optimasi Build Tanpa Cache: Jalankan secara paralel & daemon aktif
         gradle assembleDebug --parallel --no-daemon
 
-    - name: Upload APK
+    - name: Upload APK Artifact
       uses: actions/upload-artifact@v4.6.0
       with:
-        name: CamRU-Professional-APK
+        name: CamRU-Hybrid-Rust-APK
         path: "**/build/outputs/apk/debug/*.apk"
