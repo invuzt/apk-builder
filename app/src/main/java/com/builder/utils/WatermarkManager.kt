@@ -18,50 +18,48 @@ object WatermarkManager {
         val result = source.copy(source.config, true)
         val canvas = Canvas(result)
         
-        // Paint setup
         val paint = Paint().apply {
             color = Color.WHITE
-            textSize = source.width / 35f // Sedikit diperbesar
+            textSize = source.width / 35f
             isAntiAlias = true
             setShadowLayer(8f, 2f, 2f, Color.BLACK)
-            style = Paint.Style.FILL
         }
         
         val margin = 50f
         var currentY = source.height - margin
         
-        // 1. Alamat (Paling Bawah)
-        if (options.showAddress) {
-            val addrText = if (address.isNotEmpty()) address else "Mencari lokasi..."
-            val addrPaint = Paint(paint).apply { textSize = source.width / 45f }
-            currentY = drawMultilineText(canvas, addrText, margin, currentY, addrPaint, (source.width - margin*2).toInt())
-            currentY -= 30f
+        // Watermark Nickname (CakRu) di kanan bawah
+        val nickPaint = Paint(paint).apply { 
+            textSize = source.width / 45f
+            alpha = 180
+            textAlign = Paint.Align.RIGHT 
+        }
+        canvas.drawText("Shot by CakRu", source.width - margin, source.height - margin, nickPaint)
+        
+        // Logika Watermark Data (Kiri Bawah)
+        if (options.showAddress && address.isNotEmpty()) {
+            currentY = drawMultilineText(canvas, address, margin, currentY, paint, (source.width * 0.7f).toInt())
+            currentY -= 20f
         }
         
-        // 2. Koordinat (Tengah)
         if (options.showCoords) {
-            val coordText = if (location != null) "${location.latitude}, ${location.longitude}" else "GPS Menunggu..."
+            val coordText = if (location != null) "${location.latitude}, ${location.longitude}" else "Searching GPS..."
             canvas.drawText(coordText, margin, currentY, paint)
-            currentY -= paint.textSize * 1.5f
+            currentY -= paint.textSize * 1.4f
         }
         
-        // 3. Waktu & Tanggal
         val timeStr = if (options.showTime) SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date()) else ""
         val dateStr = if (options.showDate) SimpleDateFormat("EEEE, dd MMM yyyy", Locale.getDefault()).format(Date()) else ""
         val combined = listOf(dateStr, timeStr).filter { it.isNotEmpty() }.joinToString(" | ")
         
         if (combined.isNotEmpty()) {
             canvas.drawText(combined, margin, currentY, paint)
-            currentY -= paint.textSize * 1.5f
+            currentY -= paint.textSize * 1.4f
         }
         
-        // 4. Custom Text (Paling Atas)
         if (options.customText.isNotEmpty()) {
-            val customPaint = Paint(paint).apply { 
-                typeface = Typeface.DEFAULT_BOLD
-                color = Color.YELLOW
-            }
-            canvas.drawText(options.customText.uppercase(), margin, currentY, customPaint)
+            val cp = Paint(paint).apply { color = Color.YELLOW; typeface = Typeface.DEFAULT_BOLD }
+            canvas.drawText(options.customText.uppercase(), margin, currentY, cp)
         }
         
         return result
@@ -73,16 +71,13 @@ object WatermarkManager {
         var currentLine = ""
         for (word in words) {
             val testLine = if (currentLine.isEmpty()) word else "$currentLine $word"
-            if (paint.measureText(testLine) < maxWidth) currentLine = testLine 
-            else { lines.add(currentLine); currentLine = word }
+            if (paint.measureText(testLine) < maxWidth) currentLine = testLine else { lines.add(currentLine); currentLine = word }
         }
         lines.add(currentLine)
-        
         var tempY = y
-        // Render dari bawah ke atas agar koordinat selalu di atas alamat
         for (i in lines.indices.reversed()) {
             canvas.drawText(lines[i], x, tempY, paint)
-            if (i != 0) tempY -= paint.textSize * 1.2f
+            if (i != 0) tempY -= paint.textSize * 1.1f
         }
         return tempY - paint.textSize
     }

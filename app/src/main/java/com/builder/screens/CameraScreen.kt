@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -41,8 +42,6 @@ fun CameraScreen(
     onOpenGallery: () -> Unit
 ) {
     val context = LocalContext.current
-    
-    // Load setting terakhir yang tersimpan di HP
     val prefs = remember { context.getSharedPreferences("camru_prefs", Context.MODE_PRIVATE) }
     
     var preview by remember { mutableStateOf<Bitmap?>(null) }
@@ -62,28 +61,21 @@ fun CameraScreen(
         )
     }
 
+    // OPTIMASI: Pre-fetch alamat agar "Sat-Set" saat jepret
+    val currentAddress by produceState(initialValue = "", currentLoc) {
+        value = if (options.showAddress) LocationHelper.getAddress(context, currentLoc) else ""
+    }
+
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         if (preview != null) {
-            Image(
-                bitmap = preview!!.asImageBitmap(),
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-            IconButton(
-                onClick = { preview = null },
-                modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)
-            ) {
+            Image(bitmap = preview!!.asImageBitmap(), contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            IconButton(onClick = { preview = null }, modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)) {
                 Icon(Icons.Default.Close, null, tint = Color.White, modifier = Modifier.size(32.dp))
             }
         } else {
             CameraPreview(controller, Modifier.fillMaxSize())
             
-            val alpha by animateFloatAsState(
-                targetValue = if (showFlash) 1f else 0f,
-                animationSpec = tween(100),
-                finishedListener = { showFlash = false }
-            )
+            val alpha by animateFloatAsState(targetValue = if (showFlash) 1f else 0f, animationSpec = tween(100), finishedListener = { showFlash = false })
             Box(Modifier.fillMaxSize().alpha(alpha).background(Color.White))
 
             SmallFloatingActionButton(
@@ -91,9 +83,7 @@ fun CameraScreen(
                 modifier = Modifier.align(Alignment.TopStart).padding(16.dp),
                 containerColor = Color.Black.copy(0.5f),
                 contentColor = Color.White
-            ) {
-                Icon(Icons.Default.Settings, null)
-            }
+            ) { Icon(Icons.Default.Settings, null) }
 
             Row(
                 modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(bottom = 32.dp),
@@ -103,44 +93,35 @@ fun CameraScreen(
                 IconButton(onClick = {
                     controller.cameraSelector = if (controller.cameraSelector == CameraSelector.DEFAULT_BACK_CAMERA)
                         CameraSelector.DEFAULT_FRONT_CAMERA else CameraSelector.DEFAULT_BACK_CAMERA
-                }) {
-                    Icon(Icons.Default.Cameraswitch, null, tint = Color.White)
-                }
+                }) { Icon(Icons.Default.Cameraswitch, null, tint = Color.White) }
+                
                 IconButton(
                     onClick = { 
                         showFlash = true
-                        takePhoto(context, controller, isHighQuality, options, currentLoc) { preview = it }
+                        takePhoto(context, controller, isHighQuality, options, currentLoc, currentAddress) { preview = it }
                     },
                     modifier = Modifier.size(80.dp)
-                ) {
-                    Icon(Icons.Default.Circle, null, tint = Color.White, modifier = Modifier.size(80.dp))
-                }
-                IconButton(onOpenGallery) {
-                    Icon(Icons.Default.PhotoLibrary, null, tint = Color.White)
-                }
+                ) { Icon(Icons.Default.Circle, null, tint = Color.White, modifier = Modifier.size(80.dp)) }
+                
+                IconButton(onOpenGallery) { Icon(Icons.Default.PhotoLibrary, null, tint = Color.White) }
             }
         }
 
         if (showSettings) {
             ModalBottomSheet(
                 onDismissRequest = { showSettings = false },
-                containerColor = Color(0xFF1A1A1A),
+                containerColor = Color(0xFF121212),
                 contentColor = Color.White
             ) {
                 SettingsSheet(
                     hq = isHighQuality,
                     opt = options,
-                    onHq = { 
-                        isHighQuality = it
-                        prefs.edit().putBoolean("hq", it).apply()
-                    },
+                    onHq = { isHighQuality = it; prefs.edit().putBoolean("hq", it).apply() },
                     onOpt = { newOpt ->
                         options = newOpt
                         prefs.edit().apply {
-                            putBoolean("w_time", newOpt.showTime)
-                            putBoolean("w_date", newOpt.showDate)
-                            putBoolean("w_coords", newOpt.showCoords)
-                            putBoolean("w_addr", newOpt.showAddress)
+                            putBoolean("w_time", newOpt.showTime); putBoolean("w_date", newOpt.showDate)
+                            putBoolean("w_coords", newOpt.showCoords); putBoolean("w_addr", newOpt.showAddress)
                             putString("w_custom", newOpt.customText)
                         }.apply()
                     }
@@ -153,30 +134,48 @@ fun CameraScreen(
 @Composable
 fun SettingsSheet(hq: Boolean, opt: WatermarkOptions, onHq: (Boolean) -> Unit, onOpt: (WatermarkOptions) -> Unit) {
     Column(Modifier.padding(16.dp).verticalScroll(rememberScrollState())) {
-        Text("Watermark Settings", fontSize = 20.sp, modifier = Modifier.padding(bottom = 12.dp))
+        Text("Watermark Settings", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(16.dp))
+        
         Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
-            Text("High Quality Layout"); Switch(hq, onHq, Modifier.scale(0.8f))
+            Text("High Quality Photo (Slow Save)"); Switch(hq, onHq, Modifier.scale(0.8f))
         }
-        HorizontalDivider(Modifier.padding(vertical = 8.dp), color = Color.Gray)
+        HorizontalDivider(Modifier.padding(vertical = 8.dp), color = Color.DarkGray)
+        
         SettingToggle("Tampilkan Jam", opt.showTime) { onOpt(opt.copy(showTime = it)) }
         SettingToggle("Tampilkan Hari & Tanggal", opt.showDate) { onOpt(opt.copy(showDate = it)) }
         SettingToggle("Tampilkan Koordinat", opt.showCoords) { onOpt(opt.copy(showCoords = it)) }
         SettingToggle("Tampilkan Alamat", opt.showAddress) { onOpt(opt.copy(showAddress = it)) }
+        
         OutlinedTextField(
             value = opt.customText,
             onValueChange = { onOpt(opt.copy(customText = it)) },
             label = { Text("Teks Kustom") },
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
         )
-        Spacer(Modifier.height(40.dp))
+
+        Spacer(Modifier.height(24.dp))
+        Text("About", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E1E)),
+            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+        ) {
+            Column(Modifier.padding(12.dp)) {
+                Text("Developer: CakRu", color = Color.Yellow, fontWeight = FontWeight.Bold)
+                Text("License: Open Source (MIT)", fontSize = 12.sp)
+                Spacer(Modifier.height(8.dp))
+                Text("Dependencies:", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text("• Jetpack Compose (UI)\n• CameraX (Engine)\n• Google Play Services (GPS)\n• Kotlin Coroutines (Async)", fontSize = 11.sp, color = Color.Gray)
+            }
+        }
+        Spacer(Modifier.height(32.dp))
     }
 }
 
 @Composable
 fun SettingToggle(l: String, v: Boolean, onC: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
-        Text(l, fontSize = 14.sp)
-        Switch(v, onC, Modifier.scale(0.7f))
+        Text(l, fontSize = 14.sp); Switch(v, onC, Modifier.scale(0.7f))
     }
 }
 
@@ -186,16 +185,18 @@ private fun takePhoto(
     hq: Boolean,
     opt: WatermarkOptions,
     currentLoc: android.location.Location?,
+    currentAddr: String,
     onRes: (Bitmap) -> Unit
 ) {
     c.takePicture(ContextCompat.getMainExecutor(context), object : ImageCapture.OnImageCapturedCallback() {
         override fun onCaptureSuccess(img: ImageProxy) {
-            var b = img.toBitmap()
-            val m = Matrix().apply { postRotate(img.imageInfo.rotationDegrees.toFloat()) }
-            b = Bitmap.createBitmap(b, 0, 0, b.width, b.height, m, true)
+            val b = img.toBitmap().let { src ->
+                val matrix = Matrix().apply { postRotate(img.imageInfo.rotationDegrees.toFloat()) }
+                Bitmap.createBitmap(src, 0, 0, src.width, src.height, matrix, true)
+            }
             
-            val addr = if (opt.showAddress) LocationHelper.getAddress(context, currentLoc) else ""
-            val wm = WatermarkManager.apply(b, currentLoc, addr, opt)
+            // OPTIMASI: Menggunakan currentAddr yang sudah di-prefetch (Bukan cari baru)
+            val wm = WatermarkManager.apply(b, currentLoc, currentAddr, opt)
             
             FileManager.saveImageToGallery(context, wm, hq)
             onRes(wm)
