@@ -18,24 +18,20 @@ jobs:
       with:
         java-version: '17'
         distribution: 'temurin'
-        cache: gradle
 
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v4.0.0
       with:
-        gradle-version: '8.7' # Kita paksa install Gradle 8.7 secara global
+        gradle-version: '8.7'
 
     - name: Build with Gradle
       run: |
-        # Cari di mana folder 'app' berada
         APP_PATH=$(find . -name "build.gradle" -exec grep -l "com.android.application" {} \;)
         PROJECT_ROOT=$(dirname $(dirname "$APP_PATH"))
-        
-        echo "Project detected at: $PROJECT_ROOT"
         cd "$PROJECT_ROOT"
         
-        # Gunakan 'gradle' sistem, bukan './gradlew' lokal
-        gradle assembleDebug
+        # Optimasi Build Tanpa Cache: Jalankan secara paralel & daemon aktif
+        gradle assembleDebug --parallel --no-daemon
 
     - name: Upload APK
       uses: actions/upload-artifact@v4.6.0

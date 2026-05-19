@@ -41,11 +41,26 @@ fun CameraScreen(
     onOpenGallery: () -> Unit
 ) {
     val context = LocalContext.current
+    
+    // Load setting terakhir yang tersimpan di HP
+    val prefs = remember { context.getSharedPreferences("camru_prefs", Context.MODE_PRIVATE) }
+    
     var preview by remember { mutableStateOf<Bitmap?>(null) }
-    var isHighQuality by remember { mutableStateOf(true) }
     var showFlash by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
-    var options by remember { mutableStateOf(WatermarkOptions(true, true, true, true, "")) }
+    
+    var isHighQuality by remember { mutableStateOf(prefs.getBoolean("hq", true)) }
+    var options by remember {
+        mutableStateOf(
+            WatermarkOptions(
+                showTime = prefs.getBoolean("w_time", true),
+                showDate = prefs.getBoolean("w_date", true),
+                showCoords = prefs.getBoolean("w_coords", true),
+                showAddress = prefs.getBoolean("w_addr", true),
+                customText = prefs.getString("w_custom", "") ?: ""
+            )
+        )
+    }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         if (preview != null) {
@@ -112,7 +127,24 @@ fun CameraScreen(
                 containerColor = Color(0xFF1A1A1A),
                 contentColor = Color.White
             ) {
-                SettingsSheet(isHighQuality, options, { isHighQuality = it }, { options = it })
+                SettingsSheet(
+                    hq = isHighQuality,
+                    opt = options,
+                    onHq = { 
+                        isHighQuality = it
+                        prefs.edit().putBoolean("hq", it).apply()
+                    },
+                    onOpt = { newOpt ->
+                        options = newOpt
+                        prefs.edit().apply {
+                            putBoolean("w_time", newOpt.showTime)
+                            putBoolean("w_date", newOpt.showDate)
+                            putBoolean("w_coords", newOpt.showCoords)
+                            putBoolean("w_addr", newOpt.showAddress)
+                            putString("w_custom", newOpt.customText)
+                        }.apply()
+                    }
+                )
             }
         }
     }
