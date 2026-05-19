@@ -26,26 +26,14 @@ fun SettingsScreen(
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("camru_prefs", Context.MODE_PRIVATE) }
     
-    var isHighQuality by remember { mutableStateOf(prefs.getBoolean("hq", true)) }
     var isPremium by remember { mutableStateOf(prefs.getBoolean("is_premium", false)) }
-    
-    var options by remember {
-        mutableStateOf(
-            WatermarkOptions(
-                showTime = prefs.getBoolean("w_time", true),
-                showDate = prefs.getBoolean("w_date", true),
-                showCoords = prefs.getBoolean("w_coords", true),
-                showAddress = prefs.getBoolean("w_addr", true),
-                customText = prefs.getString("w_custom", "") ?: "",
-                removeBrand = prefs.getBoolean("w_remove_brand", false)
-            )
-        )
-    }
+    var useRustHdr by remember { mutableStateOf(prefs.getBoolean("rust_hdr", false)) }
+    var useRustLossless by remember { mutableStateOf(prefs.getBoolean("rust_lossless", false)) }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Settings", color = Color.White) },
+                title = { Text("Settings Pro", color = Color.White) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
@@ -63,106 +51,65 @@ fun SettingsScreen(
                 .padding(16.dp)
                 .verticalScroll(rememberScrollState())
         ) {
-            Text("Watermark Config", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.Yellow)
-            Spacer(Modifier.height(12.dp))
+            Text("User Status", fontSize = 14.sp, color = Color.Gray)
+            Text(
+                text = if(isPremium) "PREMIUM MEMBER (ACTIVE)" else "FREE VERSION",
+                color = if(isPremium) Color.Yellow else Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp
+            )
             
-            Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
-                Text("High Quality Photo (Slow Save)")
-                Switch(isHighQuality, { active ->
-                    isHighQuality = active
-                    prefs.edit().putBoolean("hq", active).apply()
-                }, Modifier.scale(0.8f))
-            }
+            Spacer(Modifier.height(20.dp))
+            Text("Eksklusif Mesin Rust (Pro)", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.Cyan)
             
-            Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
-                Text("Aktivasi Lisensi Pro (Premium)", color = if(isPremium) Color.Yellow else Color.White)
-                Switch(isPremium, { active ->
-                    isPremium = active
-                    prefs.edit().putBoolean("is_premium", active).apply()
-                    if (!active) {
-                        options = options.copy(removeBrand = false)
-                        prefs.edit().putBoolean("w_remove_brand", false).apply()
-                    }
-                }, Modifier.scale(0.8f))
-            }
-            
-            HorizontalDivider(Modifier.padding(vertical = 12.dp), color = Color.DarkGray)
-            
-            SettingToggle("Tampilkan Jam", options.showTime) { 
-                options = options.copy(showTime = it)
-                prefs.edit().putBoolean("w_time", it).apply()
-            }
-            SettingToggle("Tampilkan Hari & Tanggal", options.showDate) { 
-                options = options.copy(showDate = it)
-                prefs.edit().putBoolean("w_date", it).apply()
-            }
-            SettingToggle("Tampilkan Koordinat", options.showCoords) { 
-                options = options.copy(showCoords = it)
-                prefs.edit().putBoolean("w_coords", it).apply()
-            }
-            SettingToggle("Tampilkan Alamat", options.showAddress) { 
-                options = options.copy(showAddress = it)
-                prefs.edit().putBoolean("w_addr", it).apply()
-            }
-            
-            Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
-                Text(
-                    text = "Hilangkan Watermark 'Shot by CakRu'", 
-                    fontSize = 14.sp,
-                    color = if (isPremium) Color.White else Color.Gray
-                )
+            // Fitur HDR Rust
+            Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), Arrangement.SpaceBetween, Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Vivid HDR Engine", color = if(isPremium) Color.White else Color.Gray)
+                    Text("Warna cerah ala iPhone (Native Rust)", fontSize = 11.sp, color = Color.Gray)
+                }
                 Switch(
-                    checked = options.removeBrand, 
-                    onCheckedChange = { active ->
-                        if (isPremium) {
-                            options = options.copy(removeBrand = active)
-                            prefs.edit().putBoolean("w_remove_brand", active).apply()
-                        }
+                    checked = useRustHdr && isPremium,
+                    onCheckedChange = { 
+                        useRustHdr = it
+                        prefs.edit().putBoolean("rust_hdr", it).apply()
                     },
                     enabled = isPremium,
-                    modifier = Modifier.scale(0.7f)
+                    modifier = Modifier.scale(0.8f)
                 )
             }
-            
-            Spacer(Modifier.height(8.dp))
-            OutlinedTextField(
-                value = options.customText,
-                onValueChange = { text ->
-                    options = options.copy(customText = text)
-                    prefs.edit().putString("w_custom", text).apply()
-                },
-                label = { Text("Teks Kustom", color = Color.Gray) },
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Color.Yellow,
-                    unfocusedBorderColor = Color.Gray,
-                    focusedLabelColor = Color.Yellow
-                ),
-                modifier = Modifier.fillMaxWidth()
-            )
 
-            Spacer(Modifier.height(32.dp))
-            Text("About App", fontSize = 18.sp, fontWeight = FontWeight.Bold)
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E1E)),
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
-            ) {
-                Column(Modifier.padding(14.dp)) {
-                    Text("Developer: CakRu", color = Color.Yellow, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                    Text("License: Open Source (MIT)", fontSize = 13.sp, color = Color.LightGray)
-                    Spacer(Modifier.height(12.dp))
-                    Text("Engine Dependencies:", fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                    Text("• Jetpack Compose (Modern UI Ecosystem)\n• CameraX (Core Camera Subsystem)\n• Google Play Services (High-Precision GPS)\n• Kotlin Coroutines (Asynchronous Concurrency)", fontSize = 12.sp, color = Color.Gray)
+            // Fitur Lossless Rust
+            Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), Arrangement.SpaceBetween, Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Ultra Lossless Compression", color = if(isPremium) Color.White else Color.Gray)
+                    Text("Tajam maksimal, size minimal (WebP)", fontSize = 11.sp, color = Color.Gray)
                 }
+                Switch(
+                    checked = useRustLossless && isPremium,
+                    onCheckedChange = { 
+                        useRustLossless = it
+                        prefs.edit().putBoolean("rust_lossless", it).apply()
+                    },
+                    enabled = isPremium,
+                    modifier = Modifier.scale(0.8f)
+                )
             }
-            Spacer(Modifier.height(16.dp))
-        }
-    }
-}
 
-@Composable
-fun SettingToggle(label: String, value: Boolean, onCheckedChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), Arrangement.SpaceBetween, Alignment.CenterVertically) {
-        Text(label, fontSize = 14.sp)
-        Switch(value, onCheckedChange, Modifier.scale(0.7f))
+            HorizontalDivider(Modifier.padding(vertical = 12.dp), color = Color.DarkGray)
+            
+            Text("General Settings", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
+                Text("Aktivasi Lisensi Pro")
+                Switch(isPremium, { 
+                    isPremium = it
+                    prefs.edit().putBoolean("is_premium", it).apply()
+                }, Modifier.scale(0.8f))
+            }
+            
+            Spacer(Modifier.height(32.dp))
+            Text("Engine Info", fontSize = 14.sp, color = Color.Gray)
+            Text("Hybrid Architecture: Kotlin + Rust NDK", fontSize = 12.sp, color = Color.DarkGray)
+        }
     }
 }
