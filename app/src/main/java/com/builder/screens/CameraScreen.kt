@@ -27,7 +27,6 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -49,6 +48,10 @@ fun CameraScreen(
     var showSettings by remember { mutableStateOf(false) }
     
     var isHighQuality by remember { mutableStateOf(prefs.getBoolean("hq", true)) }
+    
+    // Status Lisensi Premium
+    var isPremium by remember { mutableStateOf(prefs.getBoolean("is_premium", false)) }
+    
     var options by remember {
         mutableStateOf(
             WatermarkOptions(
@@ -56,12 +59,12 @@ fun CameraScreen(
                 showDate = prefs.getBoolean("w_date", true),
                 showCoords = prefs.getBoolean("w_coords", true),
                 showAddress = prefs.getBoolean("w_addr", true),
-                customText = prefs.getString("w_custom", "") ?: ""
+                customText = prefs.getString("w_custom", "") ?: "",
+                removeBrand = prefs.getBoolean("w_remove_brand", false)
             )
         )
     }
 
-    // OPTIMASI: Pre-fetch alamat agar "Sat-Set" saat jepret
     val currentAddress by produceState(initialValue = "", currentLoc) {
         value = if (options.showAddress) LocationHelper.getAddress(context, currentLoc) else ""
     }
@@ -115,14 +118,25 @@ fun CameraScreen(
             ) {
                 SettingsSheet(
                     hq = isHighQuality,
+                    premium = isPremium,
                     opt = options,
                     onHq = { isHighQuality = it; prefs.edit().putBoolean("hq", it).apply() },
+                    onPremiumChange = { active ->
+                        isPremium = active
+                        prefs.edit().putBoolean("is_premium", active).apply()
+                        // Jika premium mati, paksa watermark brand muncul lagi
+                        if (!active) {
+                            options = options.copy(removeBrand = false)
+                            prefs.edit().putBoolean("w_remove_brand", false).apply()
+                        }
+                    },
                     onOpt = { newOpt ->
                         options = newOpt
                         prefs.edit().apply {
                             putBoolean("w_time", newOpt.showTime); putBoolean("w_date", newOpt.showDate)
                             putBoolean("w_coords", newOpt.showCoords); putBoolean("w_addr", newOpt.showAddress)
                             putString("w_custom", newOpt.customText)
+                            putBoolean("w_remove_brand", newOpt.removeBrand)
                         }.apply()
                     }
                 )
@@ -132,7 +146,14 @@ fun CameraScreen(
 }
 
 @Composable
-fun SettingsSheet(hq: Boolean, opt: WatermarkOptions, onHq: (Boolean) -> Unit, onOpt: (WatermarkOptions) -> Unit) {
+fun SettingsSheet(
+    hq: Boolean, 
+    premium: Boolean, 
+    opt: WatermarkOptions, 
+    onHq: (Boolean) -> Unit, 
+    onPremiumChange: (Boolean) -> Unit,
+    onOpt: (WatermarkOptions) -> Unit
+) {
     Column(Modifier.padding(16.dp).verticalScroll(rememberScrollState())) {
         Text("Watermark Settings", fontSize = 20.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(16.dp))
@@ -140,12 +161,34 @@ fun SettingsSheet(hq: Boolean, opt: WatermarkOptions, onHq: (Boolean) -> Unit, o
         Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
             Text("High Quality Photo (Slow Save)"); Switch(hq, onHq, Modifier.scale(0.8f))
         }
+        
+        // FITUR LISENSI: Simulasi Aktivasi Premium/Beli Lisensi
+        Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
+            Text("Aktivasi Lisensi Pro (Premium)", color = if(premium) Color.Yellow else Color.White)
+            Switch(premium, onPremiumChange, Modifier.scale(0.8f))
+        }
+        
         HorizontalDivider(Modifier.padding(vertical = 8.dp), color = Color.DarkGray)
         
         SettingToggle("Tampilkan Jam", opt.showTime) { onOpt(opt.copy(showTime = it)) }
         SettingToggle("Tampilkan Hari & Tanggal", opt.showDate) { onOpt(opt.copy(showDate = it)) }
         SettingToggle("Tampilkan Koordinat", opt.showCoords) { onOpt(opt.copy(showCoords = it)) }
         SettingToggle("Tampilkan Alamat", opt.showAddress) { onOpt(opt.copy(showAddress = it)) }
+        
+        // SWITCH PREMIUM: Hanya bisa diubah jika status Premium aktif
+        Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
+            Text(
+                text = "Hilangkan Watermark 'Shot by CakRu'", 
+                fontSize = 14.sp,
+                color = if (premium) Color.White else Color.Gray
+            )
+            Switch(
+                checked = opt.removeBrand, 
+                onCheckedChange = { if (premium) onOpt(opt.copy(removeBrand = it)) },
+                enabled = premium,
+                modifier = Modifier.scale(0.7f)
+            )
+        }
         
         OutlinedTextField(
             value = opt.customText,
@@ -195,9 +238,7 @@ private fun takePhoto(
                 Bitmap.createBitmap(src, 0, 0, src.width, src.height, matrix, true)
             }
             
-            // OPTIMASI: Menggunakan currentAddr yang sudah di-prefetch (Bukan cari baru)
             val wm = WatermarkManager.apply(b, currentLoc, currentAddr, opt)
-            
             FileManager.saveImageToGallery(context, wm, hq)
             onRes(wm)
             img.close()

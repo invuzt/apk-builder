@@ -10,7 +10,8 @@ data class WatermarkOptions(
     val showDate: Boolean,
     val showCoords: Boolean,
     val showAddress: Boolean,
-    val customText: String
+    val customText: String,
+    val removeBrand: Boolean // Variabel pengecekan lisensi
 )
 
 object WatermarkManager {
@@ -28,15 +29,16 @@ object WatermarkManager {
         val margin = 50f
         var currentY = source.height - margin
         
-        // Watermark Nickname (CakRu) di kanan bawah
-        val nickPaint = Paint(paint).apply { 
-            textSize = source.width / 45f
-            alpha = 180
-            textAlign = Paint.Align.RIGHT 
+        // LOGIKA LISENSI: Jika removeBrand salah (false), cetak hak cipta CakRu
+        if (!options.removeBrand) {
+            val nickPaint = Paint(paint).apply { 
+                textSize = source.width / 45f
+                alpha = 180
+                textAlign = Paint.Align.RIGHT 
+            }
+            canvas.drawText("Shot by CakRu", source.width - margin, source.height - margin, nickPaint)
         }
-        canvas.drawText("Shot by CakRu", source.width - margin, source.height - margin, nickPaint)
         
-        // Logika Watermark Data (Kiri Bawah)
         if (options.showAddress && address.isNotEmpty()) {
             currentY = drawMultilineText(canvas, address, margin, currentY, paint, (source.width * 0.7f).toInt())
             currentY -= 20f
