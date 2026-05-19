@@ -51,7 +51,6 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 
-                // Arsitektur Status Navigasi Ringan (0ms Overhead)
                 var currentScreen by remember { mutableStateOf("camera") }
 
                 when (currentScreen) {

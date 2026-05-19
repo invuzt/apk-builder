@@ -37,8 +37,6 @@ fun CameraScreen(
     onNavigateToSettings: () -> Unit
 ) {
     val context = LocalContext.current
-    
-    // Sinkronisasi data dinamis dari SharedPreferences saat halaman aktif kembali
     val prefs = remember { context.getSharedPreferences("camru_prefs", Context.MODE_PRIVATE) }
     val isHighQuality = prefs.getBoolean("hq", true)
     val options = WatermarkOptions(
@@ -53,7 +51,6 @@ fun CameraScreen(
     var preview by remember { mutableStateOf<Bitmap?>(null) }
     var showFlash by remember { mutableStateOf(false) }
 
-    // Pre-fetch alamat latar belakang untuk kecepatan eksekusi tinggi (0ms delay)
     val currentAddress by produceState(initialValue = "", currentLoc) {
         value = if (options.showAddress) LocationHelper.getAddress(context, currentLoc) else ""
     }
