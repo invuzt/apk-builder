@@ -64,3 +64,11 @@ android {
         // Namun biasanya menggunakan plugin 'org.mozilla.rust-android-gradle'
     }
 }
+
+// Konfigurasi tambahan untuk NDK (Native Development Kit)
+android {
+    externalNativeBuild {
+        // Opsional: Jika menggunakan CMake untuk menjembatani Rust
+        // Namun biasanya menggunakan plugin 'org.mozilla.rust-android-gradle'
+    }
+}
