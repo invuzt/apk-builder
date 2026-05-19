@@ -2,7 +2,7 @@ package com.builder.screens
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.Matrix
+import android.graphics.BitmapFactory
 import android.util.Log
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
@@ -36,9 +36,9 @@ fun CameraScreen(
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("camru_prefs", Context.MODE_PRIVATE) }
     
-    // Ambil status Pro & Rust
     val isPremium = prefs.getBoolean("is_premium", false)
-    val useRust = (prefs.getBoolean("rust_hdr", false) || prefs.getBoolean("rust_lossless", false)) && isPremium
+    val useRustHdr = prefs.getBoolean("rust_hdr", false) && isPremium
+    val useRustLossless = prefs.getBoolean("rust_lossless", false) && isPremium
 
     var preview by remember { mutableStateOf<Bitmap?>(null) }
 
@@ -57,7 +57,7 @@ fun CameraScreen(
 
             IconButton(
                 onClick = { 
-                    takePhoto(context, controller, useRust) { preview = it }
+                    takePhoto(context, controller, useRustHdr, useRustLossless) { preview = it }
                 },
                 modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 32.dp).size(80.dp)
             ) { Icon(Icons.Default.Circle, null, tint = Color.White, modifier = Modifier.size(80.dp)) }
@@ -65,21 +65,26 @@ fun CameraScreen(
     }
 }
 
-private fun takePhoto(context: Context, c: LifecycleCameraController, useRust: Boolean, onRes: (Bitmap) -> Unit) {
+private fun takePhoto(context: Context, c: LifecycleCameraController, useHdr: Boolean, useLossless: Boolean, onRes: (Bitmap) -> Unit) {
     c.takePicture(ContextCompat.getMainExecutor(context), object : ImageCapture.OnImageCapturedCallback() {
         override fun onCaptureSuccess(img: ImageProxy) {
+            val rotation = img.imageInfo.rotationDegrees
             val bitmap = img.toBitmap()
-            // Simpan sementara ke cache untuk diproses Rust via Path
+            
+            // Simpan file sementara di cache internal
             val tempFile = File(context.cacheDir, "temp_capture.jpg")
             tempFile.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 100, it) }
             
-            if (useRust) {
-                // KEKUATAN RUST: Proses via Path
-                NativeLib.processFileWithRust(tempFile.absolutePath)
-                Log.d("CamRu", "Processed with Rust Engine")
-            }
+            // SIKAT LEWAT RUST: Rust memutar, memberi efek warna, dan mengompres file langsung
+            NativeLib.processFileWithRust(tempFile.absolutePath, rotation, useHdr, useLossless)
             
-            onRes(bitmap)
+            // Ambil hasil matang dari Rust untuk dimuat ke Preview UI
+            val processedBitmap = BitmapFactory.decodeFile(tempFile.absolutePath)
+            
+            // EKSEKUSI UTAMA: Simpan hasil akhir Rust ke Galeri Publik Android agar permanen
+            FileManager.saveImageToGallery(context, processedBitmap, true)
+            
+            onRes(processedBitmap)
             img.close()
         }
         override fun onError(e: ImageCaptureException) { Log.e("Err", "$e") }

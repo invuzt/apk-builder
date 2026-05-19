@@ -5,9 +5,10 @@ object NativeLib {
         System.loadLibrary("rust_engine")
     }
 
-    /**
-     * Kotlin hanya kasih 'Link' (Path) ke file foto.
-     * Rust yang akan kerja keras buka, proses, dan kompres filenya.
-     */
-    external fun processFileWithRust(filePath: String)
+    external fun processFileWithRust(
+        filePath: String, 
+        rotationDegrees: Int, 
+        useHdr: Boolean, 
+        useLossless: Boolean
+    )
 }
