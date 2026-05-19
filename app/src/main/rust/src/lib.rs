@@ -1,19 +1,35 @@
 use jni::JNIEnv;
-use jni::objects::{JClass, JByteArray};
-use jni::sys::jbyteArray;
+use jni::objects::{JClass, JString};
+use std::path::Path;
+use image::{DynamicImage, GenericImageView, ImageOutputFormat};
+use std::fs::File;
+use std::io::BufWriter;
 
 #[no_mangle]
-pub extern "system" fn Java_com_builder_utils_NativeLib_processHDRAndCompress(
+pub extern "system" fn Java_com_builder_utils_NativeLib_processFileWithRust(
     mut env: JNIEnv,
     _class: JClass,
-    input_data: JByteArray,
-) -> jbyteArray {
-    // PERBAIKAN: Menggunakan 'let' khas Rust, bukan 'val' Kotlin
-    let input = env.convert_byte_array(&input_data).unwrap();
+    file_path: JString,
+) {
+    // 1. Ambil Path File dari Kotlin (Link ke Photo)
+    let path_str: String = env.get_string(&file_path).expect("Gagal ambil path").into();
+    let path = Path::new(&path_str);
 
-    // Simulasi Otot Rust Pemroses HDR & Kompresi Lossless
-    let processed_data = input.clone(); 
+    if let Ok(mut img) = image::open(path) {
+        // 2. KEKUATAN RUST: Proses Efek Warna (HDR Ringan / Vivid ala iPhone)
+        // Kita naikkan sedikit kontras dan kecerahan secara native
+        let (width, height) = img.dimensions();
+        
+        // Contoh manipulasi pixel: Adjust Brightness & Contrast
+        let processed_img = img.brighten(10).adjust_contrast(15.0);
 
-    let output = env.byte_array_from_slice(&processed_data).unwrap();
-    output.into_raw()
+        // 3. KEKUATAN RUST: Lossless / High-Efficiency WebP Compression
+        // Kita simpan kembali ke file yang sama atau file baru dengan kompresi WebP
+        // WebP Lossless biasanya jauh lebih kecil dari JPEG tapi kualitas utuh.
+        let output_path = path.with_extension("webp");
+        let file = File::create(output_path).unwrap();
+        let mut writer = BufWriter::new(file);
+
+        processed_img.write_to(&mut writer, ImageOutputFormat::WebP).expect("Gagal kompres");
+    }
 }
