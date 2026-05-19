@@ -10,26 +10,20 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.view.CameraController
 import androidx.camera.view.LifecycleCameraController
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.core.app.ActivityCompat
 import com.builder.screens.CameraScreen
+import com.builder.screens.SettingsScreen
 import com.builder.utils.PermissionHandler
 import com.google.android.gms.location.*
 
 class MainActivity : ComponentActivity() {
     private lateinit var fusedLocationClient: FusedLocationProviderClient
-    
-    // PERBAIKAN: Gunakan State agar UI mendeteksi perubahan lokasi secara instan
     private var currentLoc by mutableStateOf<Location?>(null)
 
     private val locCallback = object : LocationCallback() {
         override fun onLocationResult(res: LocationResult) { 
-            res.lastLocation?.let {
-                currentLoc = it
-            }
+            res.lastLocation?.let { currentLoc = it }
         }
     }
 
@@ -57,12 +51,24 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 
-                // UI akan otomatis terupdate setiap kali 'currentLoc' berubah
-                CameraScreen(
-                    controller = cameraController,
-                    currentLoc = currentLoc,
-                    onOpenGallery = { openGallery() }
-                )
+                // Arsitektur Status Navigasi Ringan (0ms Overhead)
+                var currentScreen by remember { mutableStateOf("camera") }
+
+                when (currentScreen) {
+                    "camera" -> {
+                        CameraScreen(
+                            controller = cameraController,
+                            currentLoc = currentLoc,
+                            onOpenGallery = { openGallery() },
+                            onNavigateToSettings = { currentScreen = "settings" }
+                        )
+                    }
+                    "settings" -> {
+                        SettingsScreen(
+                            onBack = { currentScreen = "camera" }
+                        )
+                    }
+                }
             }
         }
     }
@@ -76,12 +82,9 @@ class MainActivity : ComponentActivity() {
 
     private fun startLocUpdates() {
         if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) != 0) return
-        
-        // Minta lokasi terbaru sekarang juga
         fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
             .addOnSuccessListener { loc -> if (loc != null) currentLoc = loc }
 
-        // Update tiap 1 detik untuk akurasi maksimal di awal
         val req = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000)
             .setMinUpdateIntervalMillis(500)
             .build()
